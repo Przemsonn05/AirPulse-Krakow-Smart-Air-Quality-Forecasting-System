@@ -1,7 +1,7 @@
-# AirPulse Kraków — Smart Air Quality Forecasting System
+# AirPulse Kraków - Smart Air Quality Forecasting System
 
 **End-to-end machine learning system for daily PM10 concentration forecasting across seven monitoring stations in Kraków.**  
-Covers data engineering, exploratory analysis, multi-model forecasting, SHAP explainability, a REST API, and an interactive web dashboard — all containerised with Docker.
+Covers data engineering, exploratory analysis, multi-model forecasting, SHAP explainability, a REST API, and an interactive web dashboard - all containerised with Docker.
 
 ---
 
@@ -27,7 +27,7 @@ Covers data engineering, exploratory analysis, multi-model forecasting, SHAP exp
 
 ## 1. Project Overview
 
-Kraków ranks among the most polluted cities in Europe during winter months. PM10 — particulate matter with a diameter of 10 micrometres or less — poses serious health risks, particularly for people with respiratory and cardiovascular conditions. Daily 24-hour average concentrations frequently exceed the EU regulatory limit of **50 µg/m³**, triggering public-health advisories and transport restrictions.
+Kraków ranks among the most polluted cities in Europe during winter months. PM10 - particulate matter with a diameter of 10 micrometres or less - poses serious health risks, particularly for people with respiratory and cardiovascular conditions. Daily 24-hour average concentrations frequently exceed the EU regulatory limit of **50 µg/m³**, triggering public-health advisories and transport restrictions.
 
 This project builds a **production-ready forecasting system** that predicts next-day (and multi-day) PM10 concentrations across **all active Kraków GIOŚ monitoring stations**, with `MpKrakWadow` (Wadowicka) as the primary training target.
 
@@ -118,7 +118,7 @@ The GIOŚ export format places the header row (`Kod stacji`) at a variable row p
 load_pm10_raw(data_dir, years=range(2019, 2025))
 ```
 
-Station codes are **detected automatically** from the Excel files at runtime — the system reads only the first 5 rows of each workbook (fast), then scans for column names starting with `MpKrak*`. This means newly added GIOŚ stations are picked up without code changes.
+Station codes are **detected automatically** from the Excel files at runtime - the system reads only the first 5 rows of each workbook (fast), then scans for column names starting with `MpKrak*`. This means newly added GIOŚ stations are picked up without code changes.
 
 All seven currently known Kraków monitoring stations:
 
@@ -196,7 +196,7 @@ The heatmap of mean monthly PM10 by year reveals that **2020 and 2022 had notabl
 
 ![STL decomposition](images/eda_stl_decomposition_analysis.png)
 
-STL (Seasonal-Trend decomposition using LOESS) separates the signal into trend, seasonal, and residual components. The seasonal component confirms a dominant annual cycle. The residuals exhibit heteroscedasticity — variance is higher in winter — which motivates the **Box-Cox transformation** applied in feature engineering.
+STL (Seasonal-Trend decomposition using LOESS) separates the signal into trend, seasonal, and residual components. The seasonal component confirms a dominant annual cycle. The residuals exhibit heteroscedasticity - variance is higher in winter - which motivates the **Box-Cox transformation** applied in feature engineering.
 
 ---
 
@@ -208,7 +208,7 @@ The full feature pipeline is implemented in `src/feature_engineering.py` and run
 
 **Calendar features**
 - `month`, `year`, `season`, `is_weekend`, `is_holiday` (Polish public holidays)
-- Cyclical encoding: `month_sin/cos`, `doy_sin/cos`, `dow_sin/cos` — removes artificial discontinuities at year/week boundaries
+- Cyclical encoding: `month_sin/cos`, `doy_sin/cos`, `dow_sin/cos` - removes artificial discontinuities at year/week boundaries
 
 **Box-Cox transformation**
 - Lambda (λ = −0.243) is estimated exclusively on training data, then applied to the full series
@@ -226,14 +226,14 @@ The full feature pipeline is implemented in `src/feature_engineering.py` and run
 
 | Feature | Description |
 |---|---|
-| `is_frost` | Temperature ≤ 0 °C — proxy for increased heating demand |
-| `is_calm_wind` | Wind mean ≤ 2 m/s — weak dispersion of pollutants |
-| `wind_inverse` | 1 / (wind_max + 0.1) — non-linear dispersion proxy |
-| `heating_degree_days` | max(0, 15 − temp_avg) — physical heating demand |
-| `hdd_7d` | 7-day rolling HDD sum — accumulated thermal demand |
+| `is_frost` | Temperature ≤ 0 °C - proxy for increased heating demand |
+| `is_calm_wind` | Wind mean ≤ 2 m/s - weak dispersion of pollutants |
+| `wind_inverse` | 1 / (wind_max + 0.1) - non-linear dispersion proxy |
+| `heating_degree_days` | max(0, 15 − temp_avg) - physical heating demand |
+| `hdd_7d` | 7-day rolling HDD sum - accumulated thermal demand |
 | `rain_yesterday`, `rain_3d_sum`, `rain_7d_sum` | Washout effects of recent precipitation |
-| `dry_spell_days` | Days without rain in last 14 — particle accumulation |
-| `inversion_proxy` | frost × calm × low temperature amplitude — detects inversions |
+| `dry_spell_days` | Days without rain in last 14 - particle accumulation |
+| `inversion_proxy` | frost × calm × low temperature amplitude - detects inversions |
 
 **Multi-station spatial features**
 - Per-station `lag_1d` for all auxiliary stations (Swoszowice, Bujaka, Bulwarowa, and others detected in data)
@@ -241,10 +241,10 @@ The full feature pipeline is implemented in `src/feature_engineering.py` and run
 - Inter-station Pearson correlations exceed 0.90; spatial aggregates provide a compact regional signal
 
 **Interaction terms**
-- `is_frost_calm`: frost × calm wind — double stagnation, highest smog risk
-- `is_heating_season_calm`: heating season × calm — sustained elevated risk
-- `hdd_calm`: heating demand × no wind — physically motivated
-- `cold_dry_calm`: below-zero × no rain × calm — conditions for severe episodes
+- `is_frost_calm`: frost × calm wind - double stagnation, highest smog risk
+- `is_heating_season_calm`: heating season × calm - sustained elevated risk
+- `hdd_calm`: heating demand × no wind - physically motivated
+- `cold_dry_calm`: below-zero × no rain × calm - conditions for severe episodes
 
 ### SHAP analysis
 
@@ -265,7 +265,7 @@ A gradient-boosted decision tree model operating on the full 68-feature engineer
 - **Why:** Handles non-linear interactions, missing values, and heteroscedastic targets natively; fastest to train; supports SHAP
 - **Training:** Early stopping on a chronological 15% holdout of training data (`LGBM_ES_FRACTION = 0.15`); 3 000 estimators max, learning rate 0.02
 - **Target:** Box-Cox-transformed PM10 (λ = −0.243); predictions are back-transformed at evaluation time
-- **Split:** Strict time-series split — no shuffling; train ≤ 2022-12-31, val = 2023
+- **Split:** Strict time-series split - no shuffling; train ≤ 2022-12-31, val = 2023
 
 ### SARIMAX (statistical baseline with weather)
 
@@ -284,7 +284,7 @@ A non-seasonal ARIMA fitted on the Box-Cox series, order selected by ADF station
 
 ### Naïve persistence baseline
 
-`PM10(t+1) = PM10(t)` — predicts tomorrow equals today. All models are benchmarked against this baseline; meaningful improvement over persistence is the minimum bar for a useful forecast.
+`PM10(t+1) = PM10(t)` - predicts tomorrow equals today. All models are benchmarked against this baseline; meaningful improvement over persistence is the minimum bar for a useful forecast.
 
 ---
 
@@ -306,7 +306,7 @@ All metrics are computed on **back-transformed µg/m³ values** to be directly i
 | Model | MAE (µg/m³) | RMSE (µg/m³) | SMAPE (%) | R² |
 |---|---|---|---|---|
 | **LightGBM** | **4.32** | **6.25** | **19.6** | **0.71** |
-| Naïve baseline | 6.60 | 9.63 | 29.7 | — |
+| Naïve baseline | 6.60 | 9.63 | 29.7 | - |
 | SARIMAX | 11.5 | 16.8 | 29.1 | 0.71 |
 | ARIMA | 13.1 | 18.4 | 33.5 | 0.65 |
 
@@ -320,7 +320,7 @@ Since **health impact depends on whether the 50 µg/m³ EU limit is breached**, 
 |---|---|
 | **Precision** | Of all predicted exceedances, how many were real? |
 | **Recall** | Of all real exceedances, how many were caught? |
-| **F1** | Harmonic mean — balances false alarms and missed events |
+| **F1** | Harmonic mean - balances false alarms and missed events |
 
 For public-health use cases, **recall is prioritised**: missing a real smog day is more costly than a false alarm.
 
@@ -359,7 +359,7 @@ A dedicated binary classifier predicts whether a given day will breach the 50 µ
 Beyond single-day exceedances, **consecutive smog days** are grouped into episodes. The episode-level analysis provides:
 
 - Number and duration of multi-day smog events per year
-- Spatial coherence — whether multiple stations are simultaneously elevated
+- Spatial coherence - whether multiple stations are simultaneously elevated
 - A timeline of historical episodes (see `images/exceedance_timeline.png`)
 
 This forms the basis for a proactive alert system.
@@ -368,25 +368,25 @@ This forms the basis for a proactive alert system.
 
 ## 10. Streamlit Application
 
-The **AirPulse Kraków** dashboard (`frontend/app.py`) is a dark-themed interactive web application built with Streamlit. It connects to the FastAPI backend and requires no manual weather input — live conditions are fetched automatically.
+The **AirPulse Kraków** dashboard (`frontend/app.py`) is a dark-themed interactive web application built with Streamlit. It connects to the FastAPI backend and requires no manual weather input - live conditions are fetched automatically.
 
 ### Sidebar controls
 
-- **Monitoring Station** — dropdown listing all GIOŚ stations detected in the data (up to 7 Kraków stations); the map and forecast update accordingly
-- **Forecasting Model** — `LightGBM`, `SARIMAX`, or `ARIMA` with a brief description of each
-- **Forecast Horizon** — 1 to 3 days ahead (slider)
-- **Forecast Date** — today + 1 day by default; up to today + 3 days
-- **Live Weather** — current conditions fetched automatically from Open-Meteo (temperature, humidity, wind, pressure, rain); a "Refresh Weather" button clears the cache
-- **API Status** — live indicator showing which models are loaded in the backend
+- **Monitoring Station** - dropdown listing all GIOŚ stations detected in the data (up to 7 Kraków stations); the map and forecast update accordingly
+- **Forecasting Model** - `LightGBM`, `SARIMAX`, or `ARIMA` with a brief description of each
+- **Forecast Horizon** - 1 to 3 days ahead (slider)
+- **Forecast Date** - today + 1 day by default; up to today + 3 days
+- **Live Weather** - current conditions fetched automatically from Open-Meteo (temperature, humidity, wind, pressure, rain); a "Refresh Weather" button clears the cache
+- **API Status** - live indicator showing which models are loaded in the backend
 
 ### Forecast tab
 
 - **Interactive map** (Plotly Scattermapbox, dark tile layer) showing all monitoring stations; the selected station is highlighted with a star marker and PM10 forecast label, remaining stations show colour-coded estimated PM10 values
-- **Forecast gauge** — animated Plotly Indicator gauge with colour zones (green / amber / red) and a delta against a 3-day rolling estimate
-- **Multi-day bar chart** — point forecast ± confidence bounds per day, with the EU 50 µg/m³ limit shown as a reference line
-- **Historical PM10 chart** — last 7 days of Open-Meteo CAMS air-quality model estimates for the selected station location
-- **SHAP waterfall chart** (LightGBM only) — top feature contributions to the current forecast with signed attribution values
-- **AI narrative** — rule-based natural-language summary of dominant weather drivers, health implications, and recommended actions scaled to the forecasted severity level
+- **Forecast gauge** - animated Plotly Indicator gauge with colour zones (green / amber / red) and a delta against a 3-day rolling estimate
+- **Multi-day bar chart** - point forecast ± confidence bounds per day, with the EU 50 µg/m³ limit shown as a reference line
+- **Historical PM10 chart** - last 7 days of Open-Meteo CAMS air-quality model estimates for the selected station location
+- **SHAP waterfall chart** (LightGBM only) - top feature contributions to the current forecast with signed attribution values
+- **AI narrative** - rule-based natural-language summary of dominant weather drivers, health implications, and recommended actions scaled to the forecasted severity level
 
 ![app1](images/st_app1.png)
 
@@ -411,7 +411,7 @@ One-click download of the current forecast as a structured PDF generated with `r
 
 ### How the Models Work tab
 
-Plain-language explanations of LightGBM, ARIMA / SARIMAX, and their trade-offs — aimed at non-technical users.
+Plain-language explanations of LightGBM, ARIMA / SARIMAX, and their trade-offs - aimed at non-technical users.
 
 ![app5](images/st_app5.png)
 
@@ -438,7 +438,7 @@ The API (`backend/api.py`) is the central serving layer for all model inference.
 | `GET` | `/validation` | Full 2023 validation-set predictions (actual vs. forecast) |
 | `POST` | `/explain` | SHAP feature attributions (LightGBM only) |
 | `POST` | `/interpret` | Rule-based NLG narrative for a forecast |
-| `GET` | `/health` | Liveness check — reports loaded models, λ_bc, and history size |
+| `GET` | `/health` | Liveness check - reports loaded models, λ_bc, and history size |
 
 ### Design notes
 
@@ -497,7 +497,7 @@ python scripts/prepare_api_artifacts.py
 ### A. Technical insights
 
 - **Lag features dominate:** `lag_1d` is consistently the most important feature, confirming strong autocorrelation in daily PM10
-- **Weather interactions matter:** `hdd_calm` (heating degree days × calm wind) and `inversion_proxy` significantly improve exceedance recall — raw weather variables alone are insufficient
+- **Weather interactions matter:** `hdd_calm` (heating degree days × calm wind) and `inversion_proxy` significantly improve exceedance recall - raw weather variables alone are insufficient
 - **LightGBM outperforms classical models** on all regression metrics with ~35% lower MAE than the naïve baseline
 - **Box-Cox transformation is essential:** Without it, all models produce larger errors on high-concentration days due to heavy-tailed residuals
 - **Multi-station spatial features add value:** Auxiliary station lag-1 readings improve both validation MAE and exceedance recall, confirming regional pollution coherence
@@ -506,7 +506,7 @@ python scripts/prepare_api_artifacts.py
 
 - **Winter is the critical period:** The vast majority of EU limit exceedances occur between October and March; summer forecasts are straightforward
 - **Calm, cold, dry nights are the danger signal:** The combination of below-freezing temperatures, no wind, and no recent rain creates stagnant air conditions that trap coal-combustion emissions
-- **A few days of lag drive the forecast:** If PM10 was high yesterday, it is almost certain to be elevated today — real-time sensor data is the most valuable input
+- **A few days of lag drive the forecast:** If PM10 was high yesterday, it is almost certain to be elevated today - real-time sensor data is the most valuable input
 - **Residents can act on 1-day forecasts:** Kraków operates a public alert system; a reliable 24-hour forecast allows vulnerable residents, schools, and cyclists to plan accordingly
 - **Policy impact is measurable:** The Małopolska anti-smog regulation appears to have lowered baseline winter concentrations after 2022, visible as a downward trend in the year × month heatmap
 
@@ -516,11 +516,11 @@ python scripts/prepare_api_artifacts.py
 
 ### Summary
 
-This project delivers a complete, production-oriented PM10 forecasting pipeline — from raw GIOŚ Excel files to a live REST API and interactive multi-station dashboard. LightGBM achieves the best overall performance (MAE 4.32 µg/m³, R² 0.71 on the 2023 validation set), powered by a rich set of lag, rolling, weather, and interaction features engineered from domain knowledge. SARIMAX and ARIMA add interpretability and serve as useful comparison points.
+This project delivers a complete, production-oriented PM10 forecasting pipeline - from raw GIOŚ Excel files to a live REST API and interactive multi-station dashboard. LightGBM achieves the best overall performance (MAE 4.32 µg/m³, R² 0.71 on the 2023 validation set), powered by a rich set of lag, rolling, weather, and interaction features engineered from domain knowledge. SARIMAX and ARIMA add interpretability and serve as useful comparison points.
 
 ### Strengths
 
-- Strict temporal data splits at every stage — no leakage
+- Strict temporal data splits at every stage - no leakage
 - Domain-aware feature engineering guided by atmospheric physics
 - SHAP-based interpretability for every LightGBM prediction
 - Dynamic multi-station support: new GIOŚ stations are detected automatically without code changes
@@ -544,7 +544,7 @@ This project delivers a complete, production-oriented PM10 forecasting pipeline 
 
 ## 15. How to Run
 
-### Option A — Docker (recommended)
+### Option A - Docker (recommended)
 
 **Requirements:** Docker Desktop, model artefacts in `models/`
 
@@ -569,7 +569,7 @@ docker-compose down
 
 ---
 
-### Option B — Local (development)
+### Option B - Local (development)
 
 **1. Install dependencies**
 
