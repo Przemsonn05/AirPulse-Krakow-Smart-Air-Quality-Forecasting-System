@@ -30,8 +30,6 @@ from config.config import (
     COLOR_LGBM, COLOR_SARIMAX, COLOR_ARIMA, COLOR_NAIVE,
 )
 
-API = API_HOST
-
 # Fixed city-centre coordinates used by the live-weather fetch (weather is shared across stations)
 _LAT = 50.0577
 _LON = 19.9265
@@ -429,36 +427,148 @@ def fetch_pm10_history(days: int = 7, lat: float = 50.0577, lon: float = 19.9265
         return dates, vals, False
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def _fetch_validation() -> dict:
-    """Fetch pre-computed 2023 validation results from the backend."""
-    return _api_get("/validation")
+# ── In-process service layer (replaces HTTP calls to FastAPI) ───────────────
+
+@st.cache_resource(show_spinner="Loading models…")
+def _get_services():
+    from backend.services.model_service import get_model_service
+    from backend.services.explainability_service import ExplainabilityService
+    from backend.services.interpretability_service import InterpretabilityService
+    svc = get_model_service()
+    explain_svc = ExplainabilityService(svc.lgbm)
+    interp_svc = InterpretabilityService()
+    return svc, explain_svc, interp_svc
 
 
-@st.cache_data(ttl=30, show_spinner=False)
 def _api_get(endpoint: str) -> dict:
     try:
-        r = requests.get(f"{API}{endpoint}", timeout=8)
-        r.raise_for_status()
-        return r.json()
+        svc, _, _ = _get_services()
     except Exception as exc:
         return {"_error": str(exc)}
+
+    if endpoint == "/health":
+        return {
+            "status": "ok",
+            "models": {
+                "LightGBM": svc.lgbm is not None,
+                "ARIMA":    svc.arima is not None,
+                "SARIMAX":  svc.sarimax is not None,
+            },
+            "lambda_bc":    svc.lambda_bc,
+            "history_rows": len(svc.history) if svc.history is not None else 0,
+        }
+
+    if endpoint == "/metrics":
+        result = {}
+        for name, m in svc.metrics.items():
+            result[name] = {"mae": m["mae"], "rmse": m["rmse"], "smape": m["smape"], "r2": m.get("r2")}
+        best = min(result, key=lambda k: result[k]["mae"]) if result else "LightGBM"
+        return {"metrics": result, "best_model": best}
+
+    if endpoint == "/validation":
+        if svc.validation_results is None:
+            return {"_error": "Validation results not found. Run: python scripts/prepare_api_artifacts.py"}
+        return svc.validation_results
+
+    return {"_error": f"Unknown endpoint: {endpoint}"}
 
 
 def _api_post(endpoint: str, payload: dict) -> dict:
+    from backend.services.model_service import _compute_lgbm_features, _pm10_level, _trend_label
+    from config.config import REGIME_LABELS, REGIME_COLORS
     try:
-        r = requests.post(f"{API}{endpoint}", json=payload, timeout=15)
-        r.raise_for_status()
-        return r.json()
-    except requests.exceptions.ConnectionError:
-        return {"_error": "Cannot connect to backend. Make sure the API server is running."}
+        svc, explain_svc, interp_svc = _get_services()
     except Exception as exc:
         return {"_error": str(exc)}
+
+    if endpoint == "/predict":
+        try:
+            from datetime import date as _date
+            fdate = _date.fromisoformat(payload["forecast_date"])
+            points, lowers, uppers = svc.predict(
+                payload["model_name"],
+                payload["weather"],
+                fdate,
+                payload.get("horizon", 1),
+                payload.get("station_id", "MpKrakWadow"),
+            )
+            forecasts = []
+            from datetime import timedelta as _td
+            for i, pm10 in enumerate(points):
+                dt = fdate + _td(days=i)
+                forecasts.append({
+                    "date":       str(dt),
+                    "pm10":       round(pm10, 2),
+                    "pm10_lower": round(lowers[i], 2) if lowers else None,
+                    "pm10_upper": round(uppers[i], 2) if uppers else None,
+                })
+            cluster = svc.classify_regime(payload["weather"])
+            regime  = REGIME_LABELS.get(cluster, "Moderate")
+            return {
+                "model_name":   payload["model_name"],
+                "forecasts":    forecasts,
+                "trend":        _trend_label(points),
+                "regime":       regime,
+                "pm10_level":   _pm10_level(points[0]),
+                "regime_color": REGIME_COLORS.get(regime, "#888888"),
+            }
+        except Exception as exc:
+            return {"_error": str(exc)}
+
+    if endpoint == "/explain":
+        try:
+            dt = pd.Timestamp(payload["forecast_date"])
+            station_history = svc.get_station_history(payload.get("station_id", "MpKrakWadow"))
+            X = _compute_lgbm_features(payload["weather"], dt, station_history, svc.lambda_bc)
+            for col in svc.lgbm.feature_name_:
+                if col not in X.columns:
+                    X[col] = 0.0
+            X = X[svc.lgbm.feature_name_].fillna(0.0)
+            contribs, base = explain_svc.explain(X)
+            return {"model_name": payload["model_name"], "contributions": contribs, "base_value": base}
+        except Exception as exc:
+            return {"_error": str(exc)}
+
+    if endpoint == "/interpret":
+        try:
+            from datetime import date as _date
+            level = _pm10_level(payload["pm10_forecast"])
+            contributions: list[dict] = []
+            if svc.lgbm is not None:
+                try:
+                    dt = pd.Timestamp(payload["forecast_date"])
+                    station_history = svc.get_station_history(payload.get("station_id", "MpKrakWadow"))
+                    X = _compute_lgbm_features(payload["weather"], dt, station_history, svc.lambda_bc)
+                    for col in svc.lgbm.feature_name_:
+                        if col not in X.columns:
+                            X[col] = 0.0
+                    X = X[svc.lgbm.feature_name_].fillna(0.0)
+                    contributions, _ = explain_svc.explain(X)
+                except Exception:
+                    pass
+            fdate = _date.fromisoformat(payload["forecast_date"])
+            return interp_svc.interpret(
+                pm10=payload["pm10_forecast"],
+                pm10_level=level,
+                regime=payload.get("regime", "Moderate"),
+                feature_contributions=contributions,
+                forecast_date=fdate,
+                weather=payload["weather"],
+            )
+        except Exception as exc:
+            return {"_error": str(exc)}
+
+    return {"_error": f"Unknown endpoint: {endpoint}"}
 
 
 def _backend_ok() -> bool:
     health = _api_get("/health")
     return bool(health and "_error" not in health)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _fetch_validation() -> dict:
+    return _api_get("/validation")
 
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
@@ -1703,21 +1813,12 @@ def main() -> None:
     ])
 
     with tab_forecast:
-        if not _backend_ok():
-            st.error(
-                "⛔ Cannot connect to the backend API at `http://localhost:8000`.\n\n"
-                "Start the server with:\n```\nuvicorn backend.api:app --reload --port 8000\n```"
-            )
-        else:
-            render_forecast_tab(station_id, model, horizon, fdate, weather)
-            st.divider()
-            render_report_section(station_id, model, fdate, weather)
+        render_forecast_tab(station_id, model, horizon, fdate, weather)
+        st.divider()
+        render_report_section(station_id, model, fdate, weather)
 
     with tab_performance:
-        if not _backend_ok():
-            st.error("⛔ Backend offline.")
-        else:
-            render_performance_tab()
+        render_performance_tab()
 
     with tab_models:
         render_models_tab()

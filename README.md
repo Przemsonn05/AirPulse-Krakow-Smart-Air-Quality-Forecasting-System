@@ -25,6 +25,14 @@ Covers data engineering, exploratory analysis, multi-model forecasting, SHAP exp
 
 ---
 
+## 🚀 Live Demo
+
+| Platform | Link | Description |
+| :--- | :--- | :--- |
+| **Streamlit App** | [![Streamlit](https://img.shields.io/badge/Launch-App-FF4B4B)](https://airpulse-krakow-smart-air-quality-forecasting-system-lhb6bnzoh.streamlit.app) | Interactive dashboard and models explanations |
+
+---
+
 ## 1. Project Overview
 
 Kraków ranks among the most polluted cities in Europe during winter months. PM10 - particulate matter with a diameter of 10 micrometres or less - poses serious health risks, particularly for people with respiratory and cardiovascular conditions. Daily 24-hour average concentrations frequently exceed the EU regulatory limit of **50 µg/m³**, triggering public-health advisories and transport restrictions.
