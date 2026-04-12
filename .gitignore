@@ -40,13 +40,14 @@ data/
 *.parquet
 *.feather
 
-*.pkl
-*.joblib
+# Large neural network weights — excluded globally
 *.h5
 *.pt
 *.pth
 *.onnx
-models/
+
+# Trained model artefacts in models/ are committed to git (required on Streamlit Community Cloud)
+# models/ directory is tracked; only exclude any raw data cache inside it if needed
 
 *.log
 *.tmp
