@@ -404,13 +404,9 @@ The **AirPulse Kraków** dashboard (`frontend/app.py`) is a dark-themed interact
 
 ![app1](images/st_app1.png)
 
-This screenshot shows the **Forecast tab** of the AirPulse Kraków dashboard with the main forecasting interface fully rendered. The top section displays the interactive Plotly Scattermapbox map of Kraków, with each monitoring station pinned to its geographic location and colour-coded by the estimated PM10 level — green for clean, amber for moderate, and red for elevated concentrations. The selected station (Wadowicka) is highlighted with a star marker and annotated with the point forecast value for the chosen date. Below the map, an animated Plotly gauge displays the predicted concentration on a green-amber-red scale, with the needle position conveying air quality severity at a glance even without reading the numeric label. The multi-day bar chart on the right side shows forecasts for the selected 1–3 day horizon with confidence bounds and the EU 50 µg/m³ reference line drawn as a horizontal dashed rule. Live weather conditions — temperature, humidity, wind, pressure, and precipitation — are shown in a compact panel on the left, having been fetched automatically from Open-Meteo without requiring any manual user input.
-
 ---
 
 ![app2](images/st_app2.png)
-
-This screenshot captures the **lower portion of the Forecast tab**, focusing on the SHAP waterfall chart and the AI-generated narrative section. The SHAP waterfall chart (available for LightGBM only) breaks down the individual feature contributions to the current forecast, rendering each feature as a signed horizontal bar — positive contributions pushing the prediction above the base value and negative ones pulling it down. Features are sorted by absolute contribution magnitude, so users can identify at a glance which weather conditions and temporal factors are most responsible for the day's forecast. Below the SHAP chart, the rule-based NLG narrative translates the model's output into plain-language health guidance, describing dominant weather drivers, expected pollution severity, and recommended actions scaled to the forecasted regime. The narrative dynamically adjusts its tone — from a neutral air quality update to an urgent health warning — depending on whether the forecast falls in the Clean, Moderate, Polluted, or Very Polluted category. A one-click PDF export button is visible at the bottom of the panel, enabling users to download a structured report with all forecast details for offline reference or distribution to stakeholders.
 
 ### Report export
 
@@ -429,15 +425,11 @@ One-click download of the current forecast as a structured PDF generated with `r
 
 ![app4](images/st_app4.png)
 
-The **Model Performance tab** presents a comprehensive side-by-side comparison of all three forecasting models using validation-set metrics fetched live from the `/metrics` API endpoint. The metrics table at the top displays MAE, RMSE, SMAPE, and R² for LightGBM, SARIMAX, and ARIMA, with the best value in each column highlighted in green to make the leading model immediately identifiable without manual comparison. Below the table, a grouped bar chart visualises the same metrics, allowing users to assess relative model strengths across all four dimensions simultaneously. A descriptive analysis block contextualises the numbers — explaining, for instance, that LightGBM's advantage over SARIMAX is largest on RMSE because the gradient-boosted model handles extreme pollution spikes more accurately than a linear state-space model. The naïve persistence baseline is included as a reference point to communicate the practical uplift of using a trained model over the simplest possible forecast strategy. Because metrics are fetched dynamically, the tab always reflects the most recently trained artefacts, ensuring the displayed numbers are never stale after a model retrain.
-
 ### How the Models Work tab
 
 Plain-language explanations of LightGBM, ARIMA / SARIMAX, and their trade-offs - aimed at non-technical users.
 
 ![app5](images/st_app5.png)
-
-The **How the Models Work** tab provides accessible explanations of the three modelling approaches for non-technical users, presented as expandable cards with a consistent layout. Each model card describes how the algorithm functions at a conceptual level, its key strengths, and its limitations in the specific context of air quality forecasting — deliberately avoiding mathematical notation. LightGBM is described as a pattern-learning algorithm that discovers complex, non-linear relationships between hundreds of features and the target PM10 level without requiring prior assumptions about the functional form. SARIMAX is explained as a statistical model that explicitly accounts for seasonal cycles and recent PM10 history, with daily weather variables added as external inputs to improve accuracy during unusual conditions. ARIMA is introduced as the simplest approach — relying solely on the PM10 time series itself — and is presented as the baseline that quantifies how much explanatory power the weather covariates and engineered features add over pure autocorrelation. The tab bridges the gap between technical model documentation and practical user comprehension, reinforcing the project's commitment to transparent and explainable AI deployment.
 
 ### Business Impact section
 
@@ -445,8 +437,6 @@ The **How the Models Work** tab provides accessible explanations of the three mo
 - Impact cards: public health, environmental policy, operational use, cost of missed alarms
 
 ![app7](images/st_app7.png)
-
-The **Business Impact** section of the dashboard communicates the real-world significance of accurate PM10 forecasting to a broad audience that extends beyond data scientists and engineers. The four headline stat cards at the top summarise the project's scope: six years of historical data analysed, four models benchmarked, the 50 µg/m³ EU regulatory limit as the key decision threshold, and a three-day forecast horizon that provides actionable advance notice for planning. Below the cards, four impact panels describe concrete use cases: protecting the health of vulnerable residents (elderly, children, asthma sufferers), enabling evidence-based environmental policy evaluation, supporting operational decision-making for city transit and school authorities, and quantifying the economic and social cost of missed smog alerts in terms of hospital admissions and productivity loss. Each panel is accompanied by a short example that makes the benefit tangible — for instance, a correctly issued 24-hour advance warning allows schools to cancel outdoor sports, directly reducing children's pollutant exposure on severe days. The section is deliberately designed to resonate with stakeholders outside the technical community, including city planners, public health officials, and policy makers evaluating the return on investment of an air quality monitoring infrastructure. Visual consistency with the dark dashboard theme ensures that the business impact messaging integrates naturally into the user experience rather than feeling like an afterthought.
 
 ---
 
