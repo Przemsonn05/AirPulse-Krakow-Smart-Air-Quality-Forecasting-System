@@ -97,11 +97,11 @@ This project builds a **production-ready forecasting system** that predicts next
 └───────────────────────┘             └──────────┬────────────┘
                                                  │ loads at startup
                                       ┌──────────▼────────────┐
-                                      │  models/*.pkl/.joblib  │
+                                      │  models/*.pkl/.joblib │
                                       │  (LightGBM, ARIMA,    │
                                       │   SARIMAX, KMeans,    │
                                       │   scaler, λ_bc,       │
-                                      │   recent_history)      │
+                                      │   recent_history)     │
                                       └───────────────────────┘
 ```
 
@@ -334,7 +334,7 @@ For public-health use cases, **recall is prioritised**: missing a real smog day 
 
 ### Model comparison
 
-![Model metrics comparison](images/model_metrics_comparison.png)
+![Model metrics comparison](images/model_comparison_neutral.png)
 
 ![Forecast comparison](images/model_comparison_forecast.png)
 
@@ -545,7 +545,6 @@ This project delivers a complete, production-oriented PM10 forecasting pipeline 
 
 - **Automated retraining pipeline:** Scheduled weekly refit using Cron or Airflow on the most recent rolling window, preventing model drift
 - **Hybrid ensemble:** Weighted combination of LightGBM and SARIMAX to leverage complementary strengths (non-linear vs. linear seasonal patterns)
-- **Per-station model training:** Train separate LightGBM models for each station to capture local pollution micro-patterns
 - **Robust testing & CI/CD:** Pytest suite covering unit tests for preprocessing and integration tests for all API endpoints
 
 ---
@@ -632,3 +631,11 @@ Copy `.env` and adjust as needed before running.
 ## License
 
 [MIT](LICENSE)
+
+---
+
+<div align="center">
+
+**⭐ If you found this project helpful, please star the repository!**
+
+[![GitHub stars](https://img.shields.io/github/stars/Przemsonn05/AirPulse-Krakow-Smart-Air-Quality-Forecasting-System)]
