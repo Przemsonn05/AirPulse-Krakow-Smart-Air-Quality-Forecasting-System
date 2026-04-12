@@ -180,7 +180,7 @@ Short gaps are interpolated on a **time axis** (not row index) to respect the ir
 
 ![Time series](images/eda_time_series.png)
 
-The raw PM10 series for `MpKrakWadow` (2019–2024) reveals a strong annual seasonality with pronounced **winter spikes** driven by residential coal and biomass combustion. Clean summer periods with concentrations below 20 µg/m³ contrast sharply with heating-season episodes exceeding 200 µg/m³. The COVID-19 lockdowns in early 2020 produced a brief but notable reduction in baseline levels.
+The raw PM10 series for `MpKrakWadow` (2019–2024) reveals a strong annual seasonality with pronounced **winter spikes** driven by residential coal and biomass combustion. Clean summer periods with concentrations below 20 µg/m³ contrast sharply with heating-season episodes exceeding 200 µg/m³. The COVID-19 lockdowns in early 2020 produced a brief but notable reduction in baseline levels, visible as a slightly cleaner January–March window compared to surrounding years. The 50 µg/m³ EU daily limit is overlaid as a reference line, making it immediately apparent how frequently the threshold is crossed during the heating season. Year-over-year differences are clearly visible: 2022 stands out as a relatively clean winter, while 2023–2024 saw a modest uptick that may reflect changing weather patterns or partial reversal of emission reductions. The series exhibits marked heteroscedasticity — residual volatility is substantially higher in cold months — which directly motivates the Box-Cox variance-stabilising transformation applied later in the pipeline.
 
 ---
 
@@ -188,7 +188,7 @@ The raw PM10 series for `MpKrakWadow` (2019–2024) reveals a strong annual seas
 
 ![Monthly boxplots](images/eda_monthly_boxplots.png)
 
-Boxplots by calendar month confirm that median PM10 is approximately **3–5× higher in winter (December–February) than in summer (June–August)**. The interquartile range also widens considerably in winter, reflecting greater day-to-day variability driven by weather conditions (wind speed, temperature inversions, precipitation). The EU daily limit of 50 µg/m³ is routinely breached from October through March.
+Boxplots by calendar month confirm that median PM10 is approximately **3–5× higher in winter (December–February) than in summer (June–August)**. The interquartile range also widens considerably in winter, reflecting greater day-to-day variability driven by weather conditions such as wind speed, temperature inversions, and precipitation. The EU daily limit of 50 µg/m³ is routinely breached from October through March, with December and January showing the highest median values and the widest spread. Summer months (June–August) display a narrow, low distribution with medians below 20 µg/m³ and few outliers, confirming that forecasting difficulty is concentrated in the heating season. Spring and autumn (March–April, September–October) act as transitional periods, with moderate interquartile ranges that reflect the uncertain onset and retreat of residential heating. The extreme outliers visible in January and December correspond to severe smog episodes where PM10 exceeds 150–200 µg/m³ — events that pose acute health hazards and typically trigger public transport-free days and outdoor-activity advisories in Kraków.
 
 ---
 
@@ -196,7 +196,7 @@ Boxplots by calendar month confirm that median PM10 is approximately **3–5× h
 
 ![Heatmap month year](images/eda_heatmap_month_year.png)
 
-The heatmap of mean monthly PM10 by year reveals that **2020 and 2022 had notably cleaner winters**, while **2023 and early 2024 saw elevated concentrations**. Year-over-year variation is substantial, reflecting both meteorological differences and gradual policy changes (e.g., the Małopolska anti-smog resolution restricting solid-fuel heating).
+The heatmap of mean monthly PM10 by year reveals that **2020 and 2022 had notably cleaner winters**, while **2023 and early 2024 saw elevated concentrations**. Year-over-year variation is substantial, reflecting both meteorological differences and gradual policy changes (e.g., the Małopolska anti-smog resolution restricting solid-fuel heating). The colour scale transitions from deep blue (clean) to dark red (heavily polluted), making seasonal and inter-annual patterns immediately legible without requiring numerical labels. A consistent band of elevated values runs across the winter columns (November–February) for every year, confirming the dominance of the heating season as the primary pollution driver. The 2020 anomaly — a relatively cooler colour in January–February — aligns with a milder-than-average meteorological winter combined with early pandemic movement restrictions. Summer months form a uniformly cool horizontal band at the bottom of each column, reinforcing the finding that solar radiation, longer days, and higher wind speeds create effective natural pollutant dispersion. The heatmap serves as a compact diagnostic tool for tracking the long-term impact of anti-smog regulation: a gradual cooling of winter colours after 2022 is tentatively visible, suggesting the ordinance is having a measurable effect on baseline PM10 levels.
 
 ---
 
@@ -204,7 +204,7 @@ The heatmap of mean monthly PM10 by year reveals that **2020 and 2022 had notabl
 
 ![STL decomposition](images/eda_stl_decomposition_analysis.png)
 
-STL (Seasonal-Trend decomposition using LOESS) separates the signal into trend, seasonal, and residual components. The seasonal component confirms a dominant annual cycle. The residuals exhibit heteroscedasticity - variance is higher in winter - which motivates the **Box-Cox transformation** applied in feature engineering.
+STL (Seasonal-Trend decomposition using LOESS) separates the signal into trend, seasonal, and residual components, providing a cleaner view of each structural element than classical additive decomposition. The seasonal component confirms a dominant annual cycle with a peak-to-trough amplitude of roughly 40 µg/m³, consistent with the shift from heating to non-heating periods. The trend component reveals a subtle downward drift after 2022, tentatively linked to the progressive enforcement of the Małopolska anti-smog ordinance banning high-emission solid-fuel boilers. The residuals exhibit clear heteroscedasticity — variance is noticeably higher in winter — which directly motivates the **Box-Cox transformation** applied in the feature engineering pipeline to stabilise variance before modelling. Unlike classical decompositions, STL is robust to outliers because LOESS fitting uses locally weighted regression, preventing extreme smog-episode days from distorting the estimated seasonal shape. The LOESS bandwidth parameters were tuned to capture the annual cycle without over-smoothing multi-week heating episodes. Understanding the relative magnitude of trend, seasonal, and residual components guides model design: the strong seasonal component is addressed via calendar and lag features, while the residuals justify the inclusion of daily weather covariates to explain unexplained day-to-day variation.
 
 ---
 
@@ -258,7 +258,7 @@ The full feature pipeline is implemented in `src/feature_engineering.py` and run
 
 ![SHAP summary](images/lgbm_shap_summary.png)
 
-SHAP values from the LightGBM model confirm that **lag features and rolling means dominate predictions**, followed by heating-season indicators and inversion proxies. Weather interaction terms (e.g., `hdd_calm`, `inversion_proxy`) consistently rank in the top 15 features, validating the domain-driven feature design.
+SHAP values from the LightGBM model confirm that **lag features and rolling means dominate predictions**, followed by heating-season indicators and inversion proxies. Weather interaction terms (e.g., `hdd_calm`, `inversion_proxy`) consistently rank in the top 15 features, validating the domain-driven feature design. The beeswarm plot renders each training observation as a dot coloured by the feature's raw value (red = high, blue = low), making the direction and magnitude of each feature's effect immediately legible without requiring separate partial dependence plots. For `lag_1d`, high values (red dots) shift the SHAP contribution strongly positive — confirming strong positive autocorrelation — while low values pull forecasts below the baseline, consistent with the physical persistence of PM10 in still air. Rolling mean features (`rolling_mean_7d`, `rolling_mean_14d`) show a similar directional pattern, indicating that sustained elevated pollution over the prior weeks is a reliable forward signal for continued high concentrations. Calendar features such as `heating_season` and `month_sin/cos` appear lower in the ranking but provide stable, unconditional signal that anchors predictions when recent lag data alone is ambiguous (e.g., at the start of the season). The spread of SHAP values for `inversion_proxy` is narrower but consistently positive for high feature values, capturing the specific meteorological conditions — frost, calm wind, low temperature amplitude — that trap combustion emissions close to the surface.
 
 ---
 
@@ -336,7 +336,13 @@ For public-health use cases, **recall is prioritised**: missing a real smog day 
 
 ![Model metrics comparison](images/model_comparison_neutral.png)
 
+The model comparison bar chart presents the four core regression metrics — MAE, RMSE, SMAPE, and R² — for all evaluated models on the 2023 validation set, displayed side by side for direct comparison. LightGBM achieves the best result across every metric (MAE 4.32 µg/m³, RMSE 6.25 µg/m³, R² 0.71), outperforming the naïve persistence baseline by approximately 35% on MAE. SARIMAX, which incorporates exogenous weather variables, scores significantly better than the pure ARIMA model, demonstrating the value of meteorological covariates even within a linear statistical framework. The ARIMA baseline — trained on the Box-Cox series without external regressors — still outperforms naïve persistence on RMSE, confirming that even simple autocorrelation structure carries meaningful predictive information. Colour coding distinguishes each model across all metric panels, making it straightforward to assess relative strengths and weaknesses at a glance. The chart provides a regression-level sanity check: all three trained models surpass the persistence baseline, confirming that the engineered features and modelling choices add genuine forecasting value rather than merely fitting historical noise.
+
+---
+
 ![Forecast comparison](images/model_comparison_forecast.png)
+
+The forecast comparison chart overlays actual PM10 observations (black line) with predictions from all three models across the 2023 validation period, enabling a visual inspection of tracking quality that summary statistics alone cannot convey. LightGBM follows the daily fluctuations most closely, particularly during moderate pollution episodes in autumn and spring, while maintaining competitive accuracy during clean summer periods. SARIMAX shows broader residuals on extreme winter peaks but generally captures the seasonally elevated base level with reasonable fidelity, and its confidence intervals provide useful uncertainty bounds for operational use. ARIMA tends to underestimate sharp pollution spikes — especially multi-day smog episodes — because it lacks the non-linear interactions between weather variables and emissions that LightGBM is able to exploit through its gradient-boosted tree structure. The 50 µg/m³ EU threshold is shown as a horizontal reference line, making it straightforward to assess visually which models correctly anticipate limit exceedances and which miss them. Time-series overlay complements the numerical metrics table: while R² and MAE summarise average performance, this chart exposes systematic biases such as lag in peak detection or persistent underestimation of smog tails that aggregate statistics can obscure.
 
 ---
 
@@ -346,7 +352,7 @@ For public-health use cases, **recall is prioritised**: missing a real smog day 
 
 ![Stratified metrics](images/stratified_metrics.png)
 
-Metrics are broken down by **pollution regime** (Clean / Moderate / Polluted) and by **season** to reveal where each model struggles. Models perform well in moderate conditions but underestimate the highest peaks. LightGBM shows the best recall during Polluted episodes, while SARIMAX is more reliable in clean-air periods.
+Metrics are broken down by **pollution regime** (Clean / Moderate / Polluted) and by **season** to reveal where each model struggles and where its assumptions hold well. Models perform well in moderate conditions but consistently underestimate the highest peaks, a bias typical of mean-regression learners when the target distribution is heavily right-tailed. LightGBM shows the best recall during Polluted episodes, benefiting from interaction features such as `hdd_calm` and `inversion_proxy` that encode the meteorological conditions driving severe smog events. SARIMAX is more reliable in clean-air periods, where the linear AR/MA structure is sufficient to capture the low-volatility summer regime. The Clean regime (PM10 < 25 µg/m³) yields the lowest absolute errors for all models, because summer concentrations cluster tightly around 15 µg/m³ with minimal day-to-day variance. In the Polluted regime (PM10 > 50 µg/m³), the gap between LightGBM and the statistical models widens substantially, confirming that non-linear feature interactions are essential for capturing extreme episodes. Seasonal stratification further reveals that winter performance is approximately 40% weaker than summer performance across all models, motivating the future work direction of training a separate, winter-focused model with additional extreme-event features.
 
 ### Validation vs. test performance
 
@@ -360,7 +366,7 @@ The validation period (2023) and the held-out test period (2024) show a **notabl
 
 ![Exceedance classification](images/exceedance_classification.png)
 
-A dedicated binary classifier predicts whether a given day will breach the 50 µg/m³ threshold. This framing treats the problem as an early-warning task: the goal is high recall (catching real events) even at the cost of some false positives.
+The confusion matrices compare how well each model identifies days that breach the 50 µg/m³ EU threshold versus days that remain below it, framing the forecasting problem as a binary early-warning task. The goal is high recall — catching real exceedance events — even at the cost of some false positives, because a missed smog day has greater public-health consequences than an unnecessary advisory. LightGBM achieves the highest recall among all models, correctly flagging the majority of dangerous days and leaving the fewest exceedances undetected. SARIMAX's recall is competitive but comes with a slightly higher false-positive rate, meaning it more frequently issues warnings on days that ultimately stay below the limit. ARIMA struggles most with exceedance detection, consistent with its weaker overall performance on high-pollution days, and produces the highest false-negative rate across the validation set. The decision threshold for all models is tuned below the default 0.5 to shift the trade-off towards sensitivity, reflecting the asymmetric cost structure of the application. Together, the four confusion matrices provide a clear view of each model's alert reliability and support an informed choice of model for operational deployment.
 
 ### Smog episode detection
 
@@ -398,7 +404,13 @@ The **AirPulse Kraków** dashboard (`frontend/app.py`) is a dark-themed interact
 
 ![app1](images/st_app1.png)
 
+This screenshot shows the **Forecast tab** of the AirPulse Kraków dashboard with the main forecasting interface fully rendered. The top section displays the interactive Plotly Scattermapbox map of Kraków, with each monitoring station pinned to its geographic location and colour-coded by the estimated PM10 level — green for clean, amber for moderate, and red for elevated concentrations. The selected station (Wadowicka) is highlighted with a star marker and annotated with the point forecast value for the chosen date. Below the map, an animated Plotly gauge displays the predicted concentration on a green-amber-red scale, with the needle position conveying air quality severity at a glance even without reading the numeric label. The multi-day bar chart on the right side shows forecasts for the selected 1–3 day horizon with confidence bounds and the EU 50 µg/m³ reference line drawn as a horizontal dashed rule. Live weather conditions — temperature, humidity, wind, pressure, and precipitation — are shown in a compact panel on the left, having been fetched automatically from Open-Meteo without requiring any manual user input.
+
+---
+
 ![app2](images/st_app2.png)
+
+This screenshot captures the **lower portion of the Forecast tab**, focusing on the SHAP waterfall chart and the AI-generated narrative section. The SHAP waterfall chart (available for LightGBM only) breaks down the individual feature contributions to the current forecast, rendering each feature as a signed horizontal bar — positive contributions pushing the prediction above the base value and negative ones pulling it down. Features are sorted by absolute contribution magnitude, so users can identify at a glance which weather conditions and temporal factors are most responsible for the day's forecast. Below the SHAP chart, the rule-based NLG narrative translates the model's output into plain-language health guidance, describing dominant weather drivers, expected pollution severity, and recommended actions scaled to the forecasted regime. The narrative dynamically adjusts its tone — from a neutral air quality update to an urgent health warning — depending on whether the forecast falls in the Clean, Moderate, Polluted, or Very Polluted category. A one-click PDF export button is visible at the bottom of the panel, enabling users to download a structured report with all forecast details for offline reference or distribution to stakeholders.
 
 ### Report export
 
@@ -417,18 +429,24 @@ One-click download of the current forecast as a structured PDF generated with `r
 
 ![app4](images/st_app4.png)
 
+The **Model Performance tab** presents a comprehensive side-by-side comparison of all three forecasting models using validation-set metrics fetched live from the `/metrics` API endpoint. The metrics table at the top displays MAE, RMSE, SMAPE, and R² for LightGBM, SARIMAX, and ARIMA, with the best value in each column highlighted in green to make the leading model immediately identifiable without manual comparison. Below the table, a grouped bar chart visualises the same metrics, allowing users to assess relative model strengths across all four dimensions simultaneously. A descriptive analysis block contextualises the numbers — explaining, for instance, that LightGBM's advantage over SARIMAX is largest on RMSE because the gradient-boosted model handles extreme pollution spikes more accurately than a linear state-space model. The naïve persistence baseline is included as a reference point to communicate the practical uplift of using a trained model over the simplest possible forecast strategy. Because metrics are fetched dynamically, the tab always reflects the most recently trained artefacts, ensuring the displayed numbers are never stale after a model retrain.
+
 ### How the Models Work tab
 
 Plain-language explanations of LightGBM, ARIMA / SARIMAX, and their trade-offs - aimed at non-technical users.
 
 ![app5](images/st_app5.png)
 
+The **How the Models Work** tab provides accessible explanations of the three modelling approaches for non-technical users, presented as expandable cards with a consistent layout. Each model card describes how the algorithm functions at a conceptual level, its key strengths, and its limitations in the specific context of air quality forecasting — deliberately avoiding mathematical notation. LightGBM is described as a pattern-learning algorithm that discovers complex, non-linear relationships between hundreds of features and the target PM10 level without requiring prior assumptions about the functional form. SARIMAX is explained as a statistical model that explicitly accounts for seasonal cycles and recent PM10 history, with daily weather variables added as external inputs to improve accuracy during unusual conditions. ARIMA is introduced as the simplest approach — relying solely on the PM10 time series itself — and is presented as the baseline that quantifies how much explanatory power the weather covariates and engineered features add over pure autocorrelation. The tab bridges the gap between technical model documentation and practical user comprehension, reinforcing the project's commitment to transparent and explainable AI deployment.
+
 ### Business Impact section
 
 - Key headline metrics (6 years of data, 4 models compared, 50 µg/m³ EU limit, 3-day forecast horizon)
 - Impact cards: public health, environmental policy, operational use, cost of missed alarms
 
-![app5](images/st_app7.png)
+![app7](images/st_app7.png)
+
+The **Business Impact** section of the dashboard communicates the real-world significance of accurate PM10 forecasting to a broad audience that extends beyond data scientists and engineers. The four headline stat cards at the top summarise the project's scope: six years of historical data analysed, four models benchmarked, the 50 µg/m³ EU regulatory limit as the key decision threshold, and a three-day forecast horizon that provides actionable advance notice for planning. Below the cards, four impact panels describe concrete use cases: protecting the health of vulnerable residents (elderly, children, asthma sufferers), enabling evidence-based environmental policy evaluation, supporting operational decision-making for city transit and school authorities, and quantifying the economic and social cost of missed smog alerts in terms of hospital admissions and productivity loss. Each panel is accompanied by a short example that makes the benefit tangible — for instance, a correctly issued 24-hour advance warning allows schools to cancel outdoor sports, directly reducing children's pollutant exposure on severe days. The section is deliberately designed to resonate with stakeholders outside the technical community, including city planners, public health officials, and policy makers evaluating the return on investment of an air quality monitoring infrastructure. Visual consistency with the dark dashboard theme ensures that the business impact messaging integrates naturally into the user experience rather than feeling like an afterthought.
 
 ---
 
@@ -628,14 +646,8 @@ Copy `.env` and adjust as needed before running.
 
 ---
 
-## License
-
-[MIT](LICENSE)
-
----
-
 <div align="center">
 
 **⭐ If you found this project helpful, please star the repository!**
 
-[![GitHub stars](https://img.shields.io/github/stars/Przemsonn05/AirPulse-Krakow-Smart-Air-Quality-Forecasting-System)]
+![GitHub stars](https://img.shields.io/github/stars/Przemsonn05/AirPulse-Krakow-Smart-Air-Quality-Forecasting-System)
