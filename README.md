@@ -29,7 +29,7 @@ Covers data engineering, exploratory analysis, multi-model forecasting, SHAP exp
 
 | Platform | Link | Description |
 | :--- | :--- | :--- |
-| **Streamlit App** | [![Streamlit](https://img.shields.io/badge/Launch-App-FF4B4B)](https://airpulse-krakow-smart-air-quality-forecasting-system-lhb6bnzoh.streamlit.app) | Interactive dashboard and models explanations |
+| **Streamlit App** | [![Streamlit](https://img.shields.io/badge/Launch-App-FF4B4B)](https://airpulse-krakow-smart-air-quality-forecasting-system-hnsfun9ue.streamlit.app) | Interactive dashboard and models explanations |
 
 ---
 
