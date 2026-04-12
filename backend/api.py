@@ -34,13 +34,13 @@ from backend.schemas import (
     MetricsResponse, ModelMetrics,
     PredictRequest, PredictResponse, DayForecast,
 )
-from backend.services.model_service import ModelService, get_model_service
+from backend.services.model_service import (
+    ModelService, get_model_service, AVAILABLE_STATIONS,
+    _compute_lgbm_features, _pm10_level, _trend_label,
+)
 from backend.services.explainability_service import ExplainabilityService
 from backend.services.interpretability_service import InterpretabilityService
-from backend.services.model_service import (
-    _compute_lgbm_features, _pm10_level, _trend_label
-)
-from config.config import REGIME_LABELS, REGIME_COLORS
+from config.config import REGIME_LABELS, REGIME_COLORS, STATIONS_META
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,23 +49,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up — loading models …")
-    svc = get_model_service()          # warm up singleton
+    svc = get_model_service()        
     app.state.explain_svc = ExplainabilityService(svc.lgbm)
     app.state.interpret_svc = InterpretabilityService()
     logger.info("Models loaded.  Ready.")
     yield
     logger.info("Shutting down.")
 
-
 app = FastAPI(
     title="PM10 Air Quality Forecasting API",
-    description="Predicts daily PM10 levels for Kraków (MpKrakWadow station).",
-    version="1.0.0",
+    description="Predicts daily PM10 levels for Kraków monitoring stations.",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
@@ -76,8 +73,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
 
 def _model_svc() -> ModelService:
     return get_model_service()
@@ -90,16 +85,47 @@ def _interpret_svc() -> InterpretabilityService:
 
 def _weather_dict(w) -> dict:
     return {
-        "temp_avg":     w.temp_avg,
-        "wind_max":     w.wind_max,
-        "wind_mean":    w.wind_mean,
+        "temp_avg": w.temp_avg,
+        "wind_max": w.wind_max,
+        "wind_mean": w.wind_mean,
         "humidity_avg": w.humidity_avg,
         "pressure_avg": w.pressure_avg,
-        "rain_sum":     w.rain_sum,
+        "rain_sum": w.rain_sum,
         "snowfall_sum": w.snowfall_sum,
-        "temp_min":     w.temp_min,
-        "temp_max":     w.temp_max,
+        "temp_min": w.temp_min,
+        "temp_max": w.temp_max,
     }
+
+@app.get("/stations")
+async def stations() -> dict[str, Any]:
+    """Return all available monitoring stations with metadata."""
+    return {
+        "stations": [
+            {
+                "id": sid,
+                "name": STATIONS_META.get(sid, {}).get("name", sid),
+                "lat":  STATIONS_META.get(sid, {}).get("lat"),
+                "lon":  STATIONS_META.get(sid, {}).get("lon"),
+            }
+            for sid in AVAILABLE_STATIONS
+            if sid in STATIONS_META
+        ]
+    }
+
+@app.get("/validation")
+async def validation(
+    svc: ModelService = Depends(_model_svc),
+) -> dict[str, Any]:
+    """Return pre-computed validation-set predictions for all models (2023)."""
+    if svc.validation_results is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "Validation results not found. "
+                "Run: python scripts/prepare_api_artifacts.py"
+            ),
+        )
+    return svc.validation_results
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
@@ -108,8 +134,8 @@ async def health() -> dict[str, Any]:
         "status": "ok",
         "models": {
             "LightGBM": svc.lgbm   is not None,
-            "ARIMA":    svc.arima  is not None,
-            "SARIMAX":  svc.sarimax is not None,
+            "ARIMA": svc.arima  is not None,
+            "SARIMAX": svc.sarimax is not None,
         },
         "lambda_bc": svc.lambda_bc,
         "history_rows": len(svc.history) if svc.history is not None else 0,
@@ -124,7 +150,7 @@ async def predict(
 
     try:
         points, lowers, uppers = svc.predict(
-            req.model_name, weather, req.forecast_date, req.horizon
+            req.model_name, weather, req.forecast_date, req.horizon, req.station_id
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
@@ -142,10 +168,10 @@ async def predict(
             pm10_upper=round(uppers[i], 2) if uppers else None,
         ))
 
-    trend   = _trend_label(points)
+    trend = _trend_label(points)
     cluster = svc.classify_regime(weather, lag1=None)
-    regime  = REGIME_LABELS.get(cluster, "Moderate")
-    level   = _pm10_level(points[0])
+    regime = REGIME_LABELS.get(cluster, "Moderate")
+    level = _pm10_level(points[0])
 
     return PredictResponse(
         model_name=req.model_name,
@@ -185,7 +211,8 @@ async def explain(
 
     weather = _weather_dict(req.weather)
     dt = import_pd().Timestamp(req.forecast_date)
-    X  = _compute_lgbm_features(weather, dt, svc.history, svc.lambda_bc)
+    station_history = svc.get_station_history(req.station_id)
+    X  = _compute_lgbm_features(weather, dt, station_history, svc.lambda_bc)
 
     for col in svc.lgbm.feature_name_:
         if col not in X.columns:
@@ -207,13 +234,14 @@ async def interpret(
     int_svc: InterpretabilityService = Depends(_interpret_svc),
 ) -> InterpretResponse:
     weather = _weather_dict(req.weather)
-    level   = _pm10_level(req.pm10_forecast)
+    level = _pm10_level(req.pm10_forecast)
 
     contributions: list[dict] = []
     if svc.lgbm is not None:
         try:
             dt = import_pd().Timestamp(req.forecast_date)
-            X  = _compute_lgbm_features(weather, dt, svc.history, svc.lambda_bc)
+            station_history = svc.get_station_history(req.station_id)
+            X  = _compute_lgbm_features(weather, dt, station_history, svc.lambda_bc)
             for col in svc.lgbm.feature_name_:
                 if col not in X.columns:
                     X[col] = 0.0

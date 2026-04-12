@@ -1,6 +1,6 @@
-# PM10 Air Quality Forecasting — Kraków
+# AirPulse Kraków — Smart Air Quality Forecasting System
 
-**End-to-end machine learning system for daily PM10 concentration forecasting in Kraków, Poland.**  
+**End-to-end machine learning system for daily PM10 concentration forecasting across seven monitoring stations in Kraków.**  
 Covers data engineering, exploratory analysis, multi-model forecasting, SHAP explainability, a REST API, and an interactive web dashboard — all containerised with Docker.
 
 ---
@@ -29,14 +29,14 @@ Covers data engineering, exploratory analysis, multi-model forecasting, SHAP exp
 
 Kraków ranks among the most polluted cities in Europe during winter months. PM10 — particulate matter with a diameter of 10 micrometres or less — poses serious health risks, particularly for people with respiratory and cardiovascular conditions. Daily 24-hour average concentrations frequently exceed the EU regulatory limit of **50 µg/m³**, triggering public-health advisories and transport restrictions.
 
-This project builds a **production-ready forecasting system** that predicts the next-day (and multi-day) PM10 concentration at the Wadowicka monitoring station (`MpKrakWadow`) in Kraków.
+This project builds a **production-ready forecasting system** that predicts next-day (and multi-day) PM10 concentrations across **all active Kraków GIOŚ monitoring stations**, with `MpKrakWadow` (Wadowicka) as the primary training target.
 
 **System summary:**
 
 | Layer | Technology |
 |---|---|
 | ML pipeline | Jupyter Notebook + modular `src/` package |
-| Models | LightGBM, SARIMAX, ARIMA, Prophet |
+| Models | LightGBM, SARIMAX, ARIMA |
 | Explainability | SHAP (SHapley Additive exPlanations) |
 | REST API | FastAPI + Uvicorn |
 | Dashboard | Streamlit ("AirPulse Kraków") |
@@ -54,14 +54,14 @@ This project builds a **production-ready forecasting system** that predicts the 
 │   ├── data_loading.py              # PM10 Excel ingestion + Open-Meteo weather fetch
 │   ├── data_preprocessing.py        # Gap imputation, weather merge
 │   ├── feature_engineering.py       # Full feature pipeline (Box-Cox, lags, rolling, etc.)
-│   ├── models.py                    # ARIMA, SARIMAX, Prophet, LightGBM training
+│   ├── models.py                    # ARIMA, SARIMAX, LightGBM training
 │   ├── evaluation.py                # Metrics, plots, exceedance analysis
 │   ├── eda.py                       # EDA plots
-│   ├── config.py                    # Central constants (stations, dates, hyperparams)
+│   ├── config.py                    # Training constants (stations, dates, hyperparams)
 │   └── utils.py                     # Logger, Box-Cox inverse, plot helpers
 ├── backend/
-│   ├── api.py                       # FastAPI app (predict / explain / interpret / metrics)
-│   ├── schemas.py                   # Pydantic request/response models
+│   ├── api.py                       # FastAPI app (predict / explain / interpret / metrics / stations)
+│   ├── schemas.py                   # Pydantic v2 request/response models
 │   └── services/
 │       ├── model_service.py         # Model loading, prediction, regime classification
 │       ├── explainability_service.py# SHAP computation
@@ -69,9 +69,9 @@ This project builds a **production-ready forecasting system** that predicts the 
 ├── frontend/
 │   └── app.py                       # Streamlit dashboard ("AirPulse Kraków")
 ├── config/
-│   └── config.py                    # Shared config (API host, thresholds, colours)
+│   └── config.py                    # Shared runtime config (API host, stations, thresholds, colours)
 ├── scripts/
-│   └── prepare_api_artifacts.py     # One-off: serialise models → models/
+│   └── prepare_api_artifacts.py     # One-off: train models and serialise → models/
 ├── models/                          # Serialised artefacts (*.pkl, *.joblib)
 ├── data/                            # Raw yearly PM10 Excel files (2019–2024)
 ├── images/                          # All generated plots
@@ -87,16 +87,17 @@ This project builds a **production-ready forecasting system** that predicts the 
 │   Streamlit Frontend  │ ──────────► │   FastAPI Backend     │
 │   (port 8501)         │ ◄────────── │   (port 8000)         │
 └───────────────────────┘             └──────────┬────────────┘
-                                                 │ loads
+                                                 │ loads at startup
                                       ┌──────────▼────────────┐
                                       │  models/*.pkl/.joblib  │
                                       │  (LightGBM, ARIMA,    │
                                       │   SARIMAX, KMeans,    │
-                                      │   scaler, history)     │
+                                      │   scaler, λ_bc,       │
+                                      │   recent_history)      │
                                       └───────────────────────┘
 ```
 
-The **Streamlit frontend** collects weather inputs and forecast parameters from the user, forwards them to the **FastAPI backend**, and renders the returned forecasts, confidence intervals, SHAP contributions, and AI-generated narrative. All trained models are serialised as `.pkl` / `.joblib` artefacts and loaded into memory at API startup. The `src/` modules contain the same logic as the notebook but are importable as a library, used by both `scripts/prepare_api_artifacts.py` and the backend services.
+The **Streamlit frontend** collects a monitoring station selection, model choice, and forecast date from the user, forwards them to the **FastAPI backend**, and renders the returned forecasts, confidence intervals, SHAP contributions, and AI-generated narrative. All trained models are serialised as `.pkl` / `.joblib` artefacts and loaded into memory once at API startup. The `src/` modules contain the same logic as the notebook and are used by both `scripts/prepare_api_artifacts.py` and the backend services.
 
 ---
 
@@ -111,26 +112,31 @@ The **Streamlit frontend** collects weather inputs and forecast parameters from 
 
 ### PM10 data
 
-The GIOŚ export format places the header row (`Kod stacji`) at a variable row position depending on the year. The loader scans each file to find this row before re-reading with the correct `header` argument:
+The GIOŚ export format places the header row (`Kod stacji`) at a variable row position depending on the year. The loader scans each file dynamically to find this row before re-reading with the correct `header` argument:
 
 ```python
 load_pm10_raw(data_dir, years=range(2019, 2025))
 ```
 
-Four Kraków monitoring stations are retained:
+Station codes are **detected automatically** from the Excel files at runtime — the system reads only the first 5 rows of each workbook (fast), then scans for column names starting with `MpKrak*`. This means newly added GIOŚ stations are picked up without code changes.
+
+All seven currently known Kraków monitoring stations:
 
 | Code | Location |
 |---|---|
-| `MpKrakWadow` | Wadowicka (primary target) |
-| `MpKrakSwoszo` | Swoszowice |
+| `MpKrakWadow` | Wadowicka (primary training target) |
+| `MpKrakAlKras` | Al. Krasińskiego |
 | `MpKrakBujaka` | Bujaka |
 | `MpKrakBulwar` | Bulwarowa |
+| `MpKrakOsPias` | Os. Piastów |
+| `MpKrakSwoszo` | Swoszowice |
+| `MpKrakZloRog` | Złoty Róg |
 
 Decimal separators in the GIOŚ export use commas (Polish locale); these are normalised to dots during parsing. A strict daily `DatetimeIndex` is enforced via `asfreq('D')`, inserting `NaN` for any missing dates.
 
 ### Weather data
 
-Daily meteorological variables are fetched from the **Open-Meteo** archive endpoint:
+Daily meteorological variables are fetched from the **Open-Meteo** archive endpoint for the city-centre coordinates (shared across all stations):
 
 - Temperature (avg, min, max)
 - Precipitation (rain sum, snowfall sum)
@@ -205,7 +211,7 @@ The full feature pipeline is implemented in `src/feature_engineering.py` and run
 - Cyclical encoding: `month_sin/cos`, `doy_sin/cos`, `dow_sin/cos` — removes artificial discontinuities at year/week boundaries
 
 **Box-Cox transformation**
-- Lambda is estimated exclusively on training data, then applied to the full series
+- Lambda (λ = −0.243) is estimated exclusively on training data, then applied to the full series
 - Stabilises variance and normalises the heavy right tail of PM10, which improves both tree-based and statistical model performance
 
 **Lag features** (computed on the Box-Cox-transformed target)
@@ -213,8 +219,8 @@ The full feature pipeline is implemented in `src/feature_engineering.py` and run
 - Yesterday's PM10 is the single strongest predictor; weekly lags capture the seasonal autocorrelation structure
 
 **Rolling statistics** (computed on raw PM10 with `shift(1)` to prevent leakage)
-- `rolling_mean_{3,7,14,30}d`, `rolling_std_{3,7,14,30}d`
-- `rolling_diff_7d` (7-day minus 14-day mean): captures whether pollution is accelerating
+- `rolling_mean_{3,7,14,30}d`, `rolling_std_{7,14}d`
+- `rolling_diff_7d` (7-day minus 14-day mean): captures whether pollution is accelerating or easing
 
 **Weather-derived features**
 
@@ -228,11 +234,10 @@ The full feature pipeline is implemented in `src/feature_engineering.py` and run
 | `rain_yesterday`, `rain_3d_sum`, `rain_7d_sum` | Washout effects of recent precipitation |
 | `dry_spell_days` | Days without rain in last 14 — particle accumulation |
 | `inversion_proxy` | frost × calm × low temperature amplitude — detects inversions |
-| `high_pressure_flag` | Pressure > 30-day rolling mean — stable, stagnant anticyclone |
 
 **Multi-station spatial features**
-- Per-station `lag_1d` for all three auxiliary stations
-- `aux_mean_lag1`, `aux_max_lag1`, `aux_std_lag1`, `aux_spread_lag1`
+- Per-station `lag_1d` for all auxiliary stations (Swoszowice, Bujaka, Bulwarowa, and others detected in data)
+- `aux_mean_lag1`, `aux_max_lag1`, `aux_spread_lag1`
 - Inter-station Pearson correlations exceed 0.90; spatial aggregates provide a compact regional signal
 
 **Interaction terms**
@@ -251,33 +256,24 @@ SHAP values from the LightGBM model confirm that **lag features and rolling mean
 
 ## 7. Modeling
 
-Three complementary modelling approaches were used to cover different aspects of the forecasting problem:
+Three complementary modelling approaches are used to cover different aspects of the forecasting problem:
 
 ### LightGBM (primary model)
 
-A gradient-boosted decision tree model that operates on the full engineered feature set.
+A gradient-boosted decision tree model operating on the full 68-feature engineered feature set.
 
 - **Why:** Handles non-linear interactions, missing values, and heteroscedastic targets natively; fastest to train; supports SHAP
-- **Training:** Early stopping on a chronological 15% holdout of training data; optional Optuna hyperparameter search
-- **Target:** Box-Cox-transformed PM10; predictions are back-transformed at evaluation time
-- **Split:** Strict time-series split — no shuffling
+- **Training:** Early stopping on a chronological 15% holdout of training data (`LGBM_ES_FRACTION = 0.15`); 3 000 estimators max, learning rate 0.02
+- **Target:** Box-Cox-transformed PM10 (λ = −0.243); predictions are back-transformed at evaluation time
+- **Split:** Strict time-series split — no shuffling; train ≤ 2022-12-31, val = 2023
 
 ### SARIMAX (statistical baseline with weather)
 
 Seasonal ARIMA with exogenous regressors, order selected via `pmdarima.auto_arima` with weekly seasonality (`m=7`).
 
-- **Why:** Interpretable; captures linear AR/MA dynamics explicitly; exogenous weather variables (`temp_avg`, `wind_max`, `is_heating_season`, `inversion_proxy`, etc.) are included as regressors
+- **Why:** Interpretable; captures linear AR/MA dynamics explicitly; exogenous weather variables (`temp_avg`, `wind_max`, `is_heating_season`, `inversion_proxy`, `hdd_calm`, `rain_3d_sum`, `is_calm_wind`) are included as regressors
 - **Training:** Walk-forward validation with full refit every 7 steps; exogenous features are standardised on the training set only
 - **Confidence intervals:** Available from the SARIMAX state-space covariance
-
-### Prophet (trend + seasonality decomposition)
-
-Facebook's additive decomposition model.
-
-- **Why:** Robust to missing data; explicitly models yearly and weekly seasonality with holiday effects; interpretable trend changepoints
-- **Autoregressive extension:** A 7-day lagged rolling mean of the Box-Cox target (`rolling_bc_7d`) is appended as an extra regressor to give Prophet short-term memory
-- **Polish holidays:** Added via `add_country_holidays(country_name="PL")`
-- **Mode:** Multiplicative seasonality (appropriate for the variance structure of PM10)
 
 ### ARIMA (pure time-series baseline)
 
@@ -303,8 +299,18 @@ All metrics are computed on **back-transformed µg/m³ values** to be directly i
 | **R²** | 1 − SS_res / SS_tot | Overall variance explained; 1 is perfect |
 | **MAE** | mean(\|y − ŷ\|) | Average absolute error in µg/m³; robust to outliers |
 | **RMSE** | √mean((y − ŷ)²) | Penalises large errors more heavily; sensitive to smog peaks |
-| **MAPE** | mean(\|y − ŷ\| / y) × 100 | Scale-free percentage error (computed only for y > 5 µg/m³) |
 | **SMAPE** | Symmetric MAPE variant | Bounded, handles low-concentration days more fairly |
+
+### Validation set results (2023)
+
+| Model | MAE (µg/m³) | RMSE (µg/m³) | SMAPE (%) | R² |
+|---|---|---|---|---|
+| **LightGBM** | **4.32** | **6.25** | **19.6** | **0.71** |
+| Naïve baseline | 6.60 | 9.63 | 29.7 | — |
+| SARIMAX | 11.5 | 16.8 | 29.1 | 0.71 |
+| ARIMA | 13.1 | 18.4 | 33.5 | 0.65 |
+
+LightGBM achieves the lowest MAE and RMSE on the validation set, outperforming the naïve baseline by ~35%. SARIMAX and ARIMA provide interpretable alternatives with reasonable accuracy.
 
 ### Exceedance classification metrics
 
@@ -321,8 +327,6 @@ For public-health use cases, **recall is prioritised**: missing a real smog day 
 ### Model comparison
 
 ![Model metrics comparison](images/model_metrics_comparison.png)
-
-LightGBM achieves the lowest RMSE and MAE on the validation set, followed by SARIMAX. All models substantially outperform the naïve persistence baseline on exceedance recall, confirming the value of weather-driven features.
 
 ![Forecast comparison](images/model_comparison_forecast.png)
 
@@ -355,46 +359,68 @@ A dedicated binary classifier predicts whether a given day will breach the 50 µ
 Beyond single-day exceedances, **consecutive smog days** are grouped into episodes. The episode-level analysis provides:
 
 - Number and duration of multi-day smog events per year
-- Spatial coherence — whether all four stations are simultaneously elevated
+- Spatial coherence — whether multiple stations are simultaneously elevated
 - A timeline of historical episodes (see `images/exceedance_timeline.png`)
 
-This forms the basis for a future proactive alert system.
+This forms the basis for a proactive alert system.
 
 ---
 
 ## 10. Streamlit Application
 
-The **AirPulse Kraków** dashboard (`frontend/app.py`) is a dark-themed interactive web application.
+The **AirPulse Kraków** dashboard (`frontend/app.py`) is a dark-themed interactive web application built with Streamlit. It connects to the FastAPI backend and requires no manual weather input — live conditions are fetched automatically.
 
-### Features
+### Sidebar controls
 
-**Forecast panel**
-- Select model: `LightGBM`, `SARIMAX`, or `ARIMA`
-- Set forecast date and horizon (1–7 days)
-- Input weather conditions: temperature, wind, pressure, precipitation
-- Returns PM10 point forecast with upper/lower confidence bounds plotted on an interactive Plotly chart
-- Colour-coded PM10 level indicator: Good / Moderate / High / Very High
+- **Monitoring Station** — dropdown listing all GIOŚ stations detected in the data (up to 7 Kraków stations); the map and forecast update accordingly
+- **Forecasting Model** — `LightGBM`, `SARIMAX`, or `ARIMA` with a brief description of each
+- **Forecast Horizon** — 1 to 3 days ahead (slider)
+- **Forecast Date** — today + 1 day by default; up to today + 3 days
+- **Live Weather** — current conditions fetched automatically from Open-Meteo (temperature, humidity, wind, pressure, rain); a "Refresh Weather" button clears the cache
+- **API Status** — live indicator showing which models are loaded in the backend
 
-**SHAP explainability panel** (LightGBM only)
-- Waterfall chart showing top feature contributions to the current forecast
-- Hover for feature values and SHAP attribution magnitudes
+### Forecast tab
 
-**AI interpretation**
-- Rule-based natural-language generation engine produces a plain-English summary of the forecast
-- Summarises dominant weather drivers, health implications, and recommended actions scaled to the forecasted severity level
-
-**PDF report generation**
-- One-click export of the current forecast, SHAP explanations, and AI narrative as a structured A4 PDF (`reportlab`)
+- **Interactive map** (Plotly Scattermapbox, dark tile layer) showing all monitoring stations; the selected station is highlighted with a star marker and PM10 forecast label, remaining stations show colour-coded estimated PM10 values
+- **Forecast gauge** — animated Plotly Indicator gauge with colour zones (green / amber / red) and a delta against a 3-day rolling estimate
+- **Multi-day bar chart** — point forecast ± confidence bounds per day, with the EU 50 µg/m³ limit shown as a reference line
+- **Historical PM10 chart** — last 7 days of Open-Meteo CAMS air-quality model estimates for the selected station location
+- **SHAP waterfall chart** (LightGBM only) — top feature contributions to the current forecast with signed attribution values
+- **AI narrative** — rule-based natural-language summary of dominant weather drivers, health implications, and recommended actions scaled to the forecasted severity level
 
 ![app1](images/st_app1.png)
 
 ![app2](images/st_app2.png)
 
-**Model performance panel**
-- Live model metrics table fetched from the `/metrics` endpoint
-- Side-by-side comparison of MAE, RMSE, SMAPE across models
+### Report export
 
-![app3](images/st_app3.png)
+One-click download of the current forecast as a structured PDF generated with `reportlab`:
+- Station name, forecast date, model used
+- PM10 point forecast and confidence interval
+- Key weather drivers
+- Colour-coded pollution level and health recommendation
+- File named `airpulse_report_{station_id}_{date}.pdf`
+
+### Model Performance tab
+
+- Metrics table (MAE, RMSE, SMAPE, R²) fetched live from `/metrics`; best model highlighted in green
+- Bar chart comparing all models across all metrics
+- Descriptive analysis of LightGBM's advantage over statistical baselines
+
+![app4](images/st_app4.png)
+
+### How the Models Work tab
+
+Plain-language explanations of LightGBM, ARIMA / SARIMAX, and their trade-offs — aimed at non-technical users.
+
+![app5](images/st_app5.png)
+
+### Business Impact section
+
+- Key headline metrics (6 years of data, 4 models compared, 50 µg/m³ EU limit, 3-day forecast horizon)
+- Impact cards: public health, environmental policy, operational use, cost of missed alarms
+
+![app5](images/st_app7.png)
 
 ---
 
@@ -406,18 +432,22 @@ The API (`backend/api.py`) is the central serving layer for all model inference.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/predict` | Multi-day PM10 forecast for a selected model |
+| `GET` | `/stations` | List of all available monitoring stations with coordinates |
+| `POST` | `/predict` | Multi-day PM10 forecast for a selected model and station |
 | `GET` | `/metrics` | Pre-computed validation metrics for all models |
+| `GET` | `/validation` | Full 2023 validation-set predictions (actual vs. forecast) |
 | `POST` | `/explain` | SHAP feature attributions (LightGBM only) |
 | `POST` | `/interpret` | Rule-based NLG narrative for a forecast |
-| `GET` | `/health` | Liveness check — reports loaded models and history size |
+| `GET` | `/health` | Liveness check — reports loaded models, λ_bc, and history size |
 
 ### Design notes
 
-- **Lifespan startup:** Models are loaded once into a `ModelService` singleton at startup; no cold-load latency on requests
+- **Lifespan startup:** Models are loaded once into a `ModelService` singleton at startup; no cold-load latency on subsequent requests
+- **Station-aware predictions:** LightGBM uses the last 60 days of per-station lag history from `recent_history.pkl`; ARIMA and SARIMAX are trained on the primary station but serve all station requests
+- **Box-Cox back-transform:** All predictions are returned in original µg/m³ units regardless of the internal transform
+- **Regime classification:** A `KMeans(3)` model clusters current weather conditions into Clean / Moderate / Polluted regimes for contextual display
 - **CORS:** Open (`allow_origins=["*"]`) for local development; restrict in production
-- **Regime classification:** A `KMeans(3)` model clusters weather conditions into Clean / Moderate / Polluted regimes for contextual display
-- **Confidence intervals:** Available for ARIMA (state-space covariance) and approximated for LightGBM
+- **Confidence intervals:** Available for ARIMA and SARIMAX (state-space covariance); approximated for LightGBM
 
 **Run locally:**
 ```bash
@@ -453,7 +483,7 @@ Key design decisions:
 - The `models/` directory is mounted **read-only** into the backend container; no model files are baked into the image
 - The frontend **waits for the backend health check to pass** before starting, preventing connection errors at launch
 - `restart: unless-stopped` ensures automatic recovery from transient failures
-- Environment variables (`BACKEND_PORT`, `FRONTEND_PORT`, `LOG_LEVEL`) can be overridden via `.env`
+- Environment variables (`BACKEND_PORT`, `FRONTEND_PORT`, `API_HOST`) can be overridden via `.env`
 
 **Pre-requisite:** Generate model artefacts on the host before the first Docker run:
 ```bash
@@ -466,17 +496,17 @@ python scripts/prepare_api_artifacts.py
 
 ### A. Technical insights
 
-- **Lag features dominate:** `lag_1d` is consistently the most important feature across all models, confirming strong autocorrelation in daily PM10
-- **Weather interactions matter:** `hdd_calm` (heating degree days × calm wind) and `inversion_proxy` significantly improve exceedance recall — simple weather variables alone are insufficient
-- **LightGBM outperforms classical models** on all regression metrics; SARIMAX is competitive on clean-air days and provides better probabilistic calibration
+- **Lag features dominate:** `lag_1d` is consistently the most important feature, confirming strong autocorrelation in daily PM10
+- **Weather interactions matter:** `hdd_calm` (heating degree days × calm wind) and `inversion_proxy` significantly improve exceedance recall — raw weather variables alone are insufficient
+- **LightGBM outperforms classical models** on all regression metrics with ~35% lower MAE than the naïve baseline
 - **Box-Cox transformation is essential:** Without it, all models produce larger errors on high-concentration days due to heavy-tailed residuals
-- **Multi-station spatial features add value:** Auxiliary station lag-1 readings from Swoszowice and Bujaka improve both validation MAE and exceedance recall, confirming regional pollution coherence
+- **Multi-station spatial features add value:** Auxiliary station lag-1 readings improve both validation MAE and exceedance recall, confirming regional pollution coherence
 
 ### B. Non-technical insights
 
-- **Winter is the critical period:** The vast majority of EU limit exceedances occur between October and March; summer forecasts are straightforward and carry minimal health risk
-- **Calm, cold, dry nights are the danger signal:** The combination of below-freezing temperatures, no wind, and no recent rain creates stagnant air conditions that trap coal-combustion emissions from residential heating
-- **A few days of lag drive the forecast:** If PM10 was high yesterday, it is almost certain to be elevated today — real-time sensor data is therefore the most valuable input
+- **Winter is the critical period:** The vast majority of EU limit exceedances occur between October and March; summer forecasts are straightforward
+- **Calm, cold, dry nights are the danger signal:** The combination of below-freezing temperatures, no wind, and no recent rain creates stagnant air conditions that trap coal-combustion emissions
+- **A few days of lag drive the forecast:** If PM10 was high yesterday, it is almost certain to be elevated today — real-time sensor data is the most valuable input
 - **Residents can act on 1-day forecasts:** Kraków operates a public alert system; a reliable 24-hour forecast allows vulnerable residents, schools, and cyclists to plan accordingly
 - **Policy impact is measurable:** The Małopolska anti-smog regulation appears to have lowered baseline winter concentrations after 2022, visible as a downward trend in the year × month heatmap
 
@@ -486,29 +516,29 @@ python scripts/prepare_api_artifacts.py
 
 ### Summary
 
-This project delivers a complete, production-oriented PM10 forecasting pipeline — from raw GIOŚ Excel files to a live REST API and interactive dashboard. LightGBM achieves the best overall performance, powered by a rich set of lag, rolling, weather, and interaction features engineered from domain knowledge. SARIMAX and Prophet add interpretability and serve as useful ensemble candidates.
+This project delivers a complete, production-oriented PM10 forecasting pipeline — from raw GIOŚ Excel files to a live REST API and interactive multi-station dashboard. LightGBM achieves the best overall performance (MAE 4.32 µg/m³, R² 0.71 on the 2023 validation set), powered by a rich set of lag, rolling, weather, and interaction features engineered from domain knowledge. SARIMAX and ARIMA add interpretability and serve as useful comparison points.
 
 ### Strengths
 
 - Strict temporal data splits at every stage — no leakage
 - Domain-aware feature engineering guided by atmospheric physics
-- SHAP-based interpretability for every prediction
+- SHAP-based interpretability for every LightGBM prediction
+- Dynamic multi-station support: new GIOŚ stations are detected automatically without code changes
 - Full observability: structured logging throughout the `src/` pipeline
 - Containerised, reproducible deployment
 
 ### Limitations
 
-- **Single-station target:** The primary forecast is for `MpKrakWadow` only; a multi-target model would generalise better across the city
-- **No real-time data feed:** Weather inputs must be provided manually or via a future integration with a live forecast API
+- **Single-target training:** The LightGBM model is trained on `MpKrakWadow`; non-target stations reuse the same model weights with station-specific lag history as a reasonable approximation
+- **No real-time sensor feed:** Weather inputs come from the Open-Meteo API; PM10 history uses the CAMS atmospheric model rather than live sensor readings
 - **Distribution shift in 2024:** The model was validated on 2023 data; test performance on 2024 indicates the need for periodic retraining as emission patterns evolve
 
 ### Future improvements
 
-- **Online retraining:** Scheduled weekly refit on the most recent 30 days
-- **Ensemble model:** Weighted combination of LightGBM and SARIMAX to exploit their complementary strengths
-- **Real-time weather integration:** Replace manual weather input with automatic Open-Meteo forecast API calls
-- **Multi-day probabilistic forecasts:** Extend confidence intervals to a full 7-day quantile forecast
-- **Push alerts:** Notify users when exceedance probability exceeds a configurable threshold
+- **Automated retraining pipeline:** Scheduled weekly refit using Cron or Airflow on the most recent rolling window, preventing model drift
+- **Hybrid ensemble:** Weighted combination of LightGBM and SARIMAX to leverage complementary strengths (non-linear vs. linear seasonal patterns)
+- **Per-station model training:** Train separate LightGBM models for each station to capture local pollution micro-patterns
+- **Robust testing & CI/CD:** Pytest suite covering unit tests for preprocessing and integration tests for all API endpoints
 
 ---
 
@@ -580,7 +610,6 @@ jupyter lab notebooks/air_quality_forecast.ipynb
 | `API_HOST` | `http://localhost:8000` | Backend URL seen by the frontend |
 | `BACKEND_PORT` | `8000` | Backend listen port |
 | `FRONTEND_PORT` | `8501` | Frontend listen port |
-| `LOG_LEVEL` | `info` | Uvicorn/Python log level |
 
 Copy `.env` and adjust as needed before running.
 
@@ -588,7 +617,7 @@ Copy `.env` and adjust as needed before running.
 
 ## Tech Stack
 
-`Python 3.11+` · `pandas` · `numpy` · `scikit-learn` · `LightGBM` · `statsmodels` · `pmdarima` · `Prophet` · `SHAP` · `Optuna` · `FastAPI` · `Pydantic` · `Streamlit` · `Plotly` · `Docker` · `scipy` · `holidays` · `reportlab`
+`Python 3.11+` · `pandas` · `numpy` · `scikit-learn` · `LightGBM` · `statsmodels` · `pmdarima` · `SHAP` · `FastAPI` · `Pydantic v2` · `Streamlit` · `Plotly` · `Docker` · `scipy` · `holidays` · `reportlab` · `requests`
 
 ---
 

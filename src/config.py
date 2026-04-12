@@ -9,9 +9,27 @@ ROOT_DIR   = Path(__file__).resolve().parent.parent
 DATA_DIR   = ROOT_DIR / "data"
 IMAGES_DIR = ROOT_DIR / "images"
 
-STATIONS = ["MpKrakWadow", "MpKrakSwoszo", "MpKrakBujaka", "MpKrakBulwar"]
-TARGET          = "MpKrakWadow"          
-AUX_STATIONS    = ["MpKrakBujaka", "MpKrakBulwar", "MpKrakSwoszo"]
+TARGET = "MpKrakWadow"
+
+def _detect_stations() -> tuple[list[str], list[str]]:
+    """Detect all MpKrak* stations from the data directory.
+
+    Returns (STATIONS, AUX_STATIONS) with TARGET always first in STATIONS.
+    Falls back to the original four stations if detection fails.
+    """
+    try:
+        from src.data_loading import detect_krakow_stations
+        all_s = detect_krakow_stations(DATA_DIR)
+        if all_s:
+            aux = [s for s in all_s if s != TARGET]
+            return all_s, aux
+    except Exception:
+        pass
+    # Original fallback
+    fallback = ["MpKrakWadow", "MpKrakSwoszo", "MpKrakBujaka", "MpKrakBulwar"]
+    return fallback, [s for s in fallback if s != TARGET]
+
+STATIONS, AUX_STATIONS = _detect_stations()
 PM10_BC_COL     = "PM10_transformed"     
 
 YEARS = range(2019, 2025)

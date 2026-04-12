@@ -32,14 +32,22 @@ logger = logging.getLogger(__name__)
 
 _MODELS = Path(__file__).resolve().parent.parent.parent / "models"
 
-_LGBM_PATH    = _MODELS / "lgbm_model.joblib"
-_ARIMA_PATH   = _MODELS / "arima_model.pkl"
-_SARIMAX_PATH = _MODELS / "sarimax_model.pkl"
-_LAMBDA_PATH  = _MODELS / "lambda_bc.pkl"
-_HISTORY_PATH = _MODELS / "recent_history.pkl"
-_SCALER_PATH  = _MODELS / "scaler.pkl"
-_KMEANS_PATH  = _MODELS / "kmeans_model.pkl"
-_METRICS_PATH = _MODELS / "metrics.pkl"
+# Target station the models were trained on
+_TARGET_STATION = "MpKrakWadow"
+
+# Derived at import time from the dynamically detected station list in config
+from config.config import STATIONS_META as _STATIONS_META
+AVAILABLE_STATIONS: list[str] = list(_STATIONS_META.keys())
+
+_LGBM_PATH       = _MODELS / "lgbm_model.joblib"
+_ARIMA_PATH      = _MODELS / "arima_model.pkl"
+_SARIMAX_PATH    = _MODELS / "sarimax_model.pkl"
+_LAMBDA_PATH     = _MODELS / "lambda_bc.pkl"
+_HISTORY_PATH    = _MODELS / "recent_history.pkl"
+_SCALER_PATH     = _MODELS / "scaler.pkl"
+_KMEANS_PATH     = _MODELS / "kmeans_model.pkl"
+_METRICS_PATH    = _MODELS / "metrics.pkl"
+_VALIDATION_PATH = _MODELS / "validation_results.pkl"
 
 
 def _load_pkl(path: Path):
@@ -234,6 +242,44 @@ def _compute_lgbm_features(
     return pd.DataFrame([row])
 
 
+def _get_station_history(
+    history: Optional[pd.DataFrame],
+    station_id: str,
+    lambda_bc: float,
+) -> Optional[pd.DataFrame]:
+    """
+    Return a copy of *history* with PM10_transformed derived from the
+    requested station's raw PM10 column.
+
+    For the training target (MpKrakWadow) the stored PM10_transformed is used
+    as-is.  For auxiliary stations the same Box-Cox lambda is applied to the
+    station's raw PM10 column (an acceptable approximation — the models are
+    the same for all stations).
+
+    ARIMA and SARIMAX were trained solely on MpKrakWadow; their predictions
+    are not station-specific regardless of this function.
+    """
+    if history is None:
+        return None
+    if station_id == _TARGET_STATION:
+        return history
+    if station_id not in history.columns:
+        logger.warning(
+            "Station %s not found in history columns; falling back to %s history.",
+            station_id, _TARGET_STATION,
+        )
+        return history
+
+    h = history.copy()
+    raw = h[station_id].clip(lower=0.01).fillna(0.01)
+    # Apply Box-Cox forward transform with the stored lambda
+    if lambda_bc == 0:
+        h["PM10_transformed"] = np.log(raw)
+    else:
+        h["PM10_transformed"] = (raw ** lambda_bc - 1) / lambda_bc
+    return h
+
+
 def _heuristic_regime(temp_avg: float, wind_max: float, is_heat: int) -> int:
     """Classify into 0=Clean, 1=Moderate, 2=Polluted via simple rules.
     Used as fallback when KMeans model is unavailable."""
@@ -272,6 +318,9 @@ class ModelService:
         raw_metrics = _load_pkl(_METRICS_PATH)
         self.metrics: dict = raw_metrics if isinstance(raw_metrics, dict) else {}
 
+        raw_val = _load_pkl(_VALIDATION_PATH)
+        self.validation_results: Optional[dict] = raw_val if isinstance(raw_val, dict) else None
+
         self._fill_default_metrics()
 
         avail = [n for n, m in [
@@ -299,19 +348,29 @@ class ModelService:
         weather: dict,
         forecast_date: date,
         horizon: int = 1,
+        station_id: str = _TARGET_STATION,
     ) -> tuple[list[float], Optional[list[float]], Optional[list[float]]]:
         """
         Returns (point_forecasts, lower_bounds, upper_bounds).
         All values in µg/m³ (PM10 physical scale).
+
+        LightGBM uses station-specific lag history when station_id differs from
+        the training target.  ARIMA and SARIMAX were trained on MpKrakWadow
+        only — their outputs are station-agnostic.
         """
         if model_name == "LightGBM":
-            return self._predict_lgbm(weather, forecast_date, horizon)
+            history = self.get_station_history(station_id)
+            return self._predict_lgbm(weather, forecast_date, horizon, history)
         elif model_name == "SARIMAX":
             return self._predict_sarimax(weather, forecast_date, horizon)
         elif model_name == "ARIMA":
             return self._predict_arima(horizon)
         else:
             raise ValueError(f"Unknown model: {model_name}")
+
+    def get_station_history(self, station_id: str) -> Optional[pd.DataFrame]:
+        """Return history with PM10_transformed for the requested station."""
+        return _get_station_history(self.history, station_id, self.lambda_bc)
 
     def classify_regime(self, weather: dict, lag1: Optional[float] = None) -> int:
         """Returns cluster id 0/1/2."""
@@ -332,13 +391,17 @@ class ModelService:
         )
 
     def _predict_lgbm(
-        self, weather: dict, forecast_date: date, horizon: int
+        self,
+        weather: dict,
+        forecast_date: date,
+        horizon: int,
+        history: Optional[pd.DataFrame] = None,
     ) -> tuple[list[float], None, None]:
         if self.lgbm is None:
             raise RuntimeError("LightGBM model not loaded")
 
         preds = []
-        history = self.history.copy() if self.history is not None else None
+        history = history.copy() if history is not None else None
 
         for day_offset in range(horizon):
             dt = pd.Timestamp(forecast_date) + pd.Timedelta(days=day_offset)

@@ -21,18 +21,46 @@ FRONTEND_PORT = int(os.getenv("FRONTEND_PORT", "8501"))
 
 TARGET_STATION = "MpKrakWadow"
 
-STATIONS_META = {
+_ALL_STATION_META: dict[str, dict] = {
     "MpKrakWadow":  {"lat": 50.0577, "lon": 19.9265, "name": "Wadowicka"},
-    "MpKrakSwoszo": {"lat": 50.0200, "lon": 19.8960, "name": "Swoszowice"},
+    "MpKrakAlKras": {"lat": 50.0621, "lon": 19.9355, "name": "Al. Krasińskiego"},
     "MpKrakBujaka": {"lat": 50.0080, "lon": 19.9020, "name": "Bujaka"},
     "MpKrakBulwar": {"lat": 50.0573, "lon": 19.9346, "name": "Bulwarowa"},
+    "MpKrakOsPias": {"lat": 50.0749, "lon": 20.0234, "name": "Os. Piastów"},
+    "MpKrakSwoszo": {"lat": 50.0200, "lon": 19.8960, "name": "Swoszowice"},
+    "MpKrakZloRog": {"lat": 50.0201, "lon": 20.0207, "name": "Złoty Róg"},
 }
 
-PM10_GOOD       = 25   
-PM10_MODERATE   = 50  
-PM10_HIGH       = 100  
+def _build_stations_meta() -> dict[str, dict]:
+    """Return STATIONS_META restricted to stations actually present in data/.
 
-EU_DAILY_LIMIT  = 50
+    Reads only the header rows of each Excel workbook (fast).  Falls back to
+    the four original stations if the data directory is missing or unreadable.
+    """
+    try:
+        import sys
+        sys.path.insert(0, str(ROOT_DIR))
+        from src.data_loading import detect_krakow_stations
+        detected = detect_krakow_stations(DATA_DIR)
+    except Exception:
+        detected = []
+
+    if not detected:
+        detected = ["MpKrakWadow", "MpKrakBujaka", "MpKrakBulwar", "MpKrakSwoszo"]
+
+    return {
+        sid: _ALL_STATION_META[sid]
+        for sid in detected
+        if sid in _ALL_STATION_META
+    }
+
+STATIONS_META: dict[str, dict] = _build_stations_meta()
+
+PM10_GOOD = 25   
+PM10_MODERATE = 50  
+PM10_HIGH = 100  
+
+EU_DAILY_LIMIT = 50
 
 MODEL_NAMES = ["LightGBM", "SARIMAX", "ARIMA"]
 

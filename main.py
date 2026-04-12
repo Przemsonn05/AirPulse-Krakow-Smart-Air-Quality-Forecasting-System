@@ -94,7 +94,7 @@ def run_sanity_checks(
     assert "lag_1d" in df_features.columns, "lag_1d feature missing"
     sample = df_features[[config.TARGET, config.PM10_BC_COL, "lag_1d"]].dropna().head(200)
     expected = df_features[config.PM10_BC_COL].shift(1).dropna()
-    actual   = df_features["lag_1d"].dropna()
+    actual = df_features["lag_1d"].dropna()
     diff = (expected - actual).abs().max()
     assert diff < 1e-6, f"lag_1d does not equal shift(1) of PM10_transformed (max diff={diff})"
 
@@ -105,7 +105,7 @@ def stage_load() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     logger.info("=== STAGE 1: Data Loading ===")
 
     raw_pm10 = load_pm10_raw(config.DATA_DIR, config.YEARS)
-    pm10     = parse_pm10_stations(raw_pm10, config.STATIONS)
+    pm10 = parse_pm10_stations(raw_pm10, config.STATIONS)
 
     weather = fetch_weather(
         config.WEATHER_API_URL,
@@ -122,7 +122,7 @@ def stage_preprocess(
     """Impute gaps, flag long gaps, and merge PM10 with weather."""
     logger.info("=== STAGE 2: Preprocessing ===")
 
-    pm10   = impute_gaps(pm10, config.STATIONS, limit=config.GAP_INTERP_LIMIT)
+    pm10 = impute_gaps(pm10, config.STATIONS, limit=config.GAP_INTERP_LIMIT)
     merged = merge_weather(pm10, weather)
     return merged
 

@@ -20,12 +20,12 @@ import logging
 import pickle
 import sys
 from pathlib import Path
+from typing import Optional
 
 import joblib
 import numpy as np
 import pandas as pd
 
-# ── Path setup ────────────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -48,13 +48,11 @@ logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s | %(levelname)-8s | %(message)s")
 log = logging.getLogger(__name__)
 
-
 def smape(actual: np.ndarray, pred: np.ndarray) -> float:
     mask = np.isfinite(actual) & np.isfinite(pred) & (np.abs(actual) + np.abs(pred) > 0)
     return float(100 * np.mean(
         2 * np.abs(actual[mask] - pred[mask]) / (np.abs(actual[mask]) + np.abs(pred[mask]))
     ))
-
 
 def main() -> None:
     log.info("Loading PM10 data …")
@@ -64,7 +62,7 @@ def main() -> None:
     log.info("Fetching weather data …")
     weather = fetch_weather(WEATHER_API_URL, WEATHER_PARAMS, WEATHER_COL_RENAME)
 
-    pm10   = impute_gaps(pm10, STATIONS, limit=GAP_INTERP_LIMIT)
+    pm10 = impute_gaps(pm10, STATIONS, limit=GAP_INTERP_LIMIT)
     merged = merge_weather(pm10, weather)
 
     log.info("Running feature engineering …")
@@ -111,10 +109,15 @@ def main() -> None:
     bc_col  = "PM10_transformed"
 
     lgbm_path = MODELS_DIR / "lgbm_model.joblib"
+    _lgbm_val_preds: Optional[np.ndarray] = None 
+
     if lgbm_path.exists():
         lgbm = joblib.load(lgbm_path)
-        feat_cols = [c for c in lgbm.feature_name_ if c in val.columns]
-        X_val = val[feat_cols].ffill().fillna(0.0)
+        X_val = val.copy().ffill().fillna(0.0)
+        for col in lgbm.feature_name_:
+            if col not in X_val.columns:
+                X_val[col] = 0.0
+        X_val = X_val[lgbm.feature_name_].fillna(0.0)
         y_val = val[bc_col].values
         preds_bc = lgbm.predict(X_val)
         actual   = safe_inv_boxcox(y_val, lambda_bc)
@@ -127,6 +130,7 @@ def main() -> None:
             "r2":    round(float(r2_score(actual, pred_pm10)), 4),
         }
         log.info("LightGBM val metrics: %s", metrics["LightGBM"])
+        _lgbm_val_preds = pred_pm10
 
     actual_all = safe_inv_boxcox(val[bc_col].values, lambda_bc)
     naive_preds = np.roll(actual_all, 1); naive_preds[0] = actual_all[0]
@@ -140,6 +144,61 @@ def main() -> None:
     with open(MODELS_DIR / "metrics.pkl", "wb") as fh:
         pickle.dump(metrics, fh)
     log.info("Saved metrics.pkl: %s", list(metrics.keys()))
+
+    log.info("Computing validation-set predictions for all models …")
+
+    val_dates = [str(d.date()) for d in val.index]
+    val_results: dict = {
+        "dates":    val_dates,
+        "actual":   actual_all.tolist(),
+        "LightGBM": None,
+        "ARIMA":    None,
+        "SARIMAX":  None,
+    }
+
+    if _lgbm_val_preds is not None:
+        val_results["LightGBM"] = {
+            "predicted": _lgbm_val_preds.tolist(),
+            "residuals": (_lgbm_val_preds - actual_all).tolist(),
+        }
+
+    arima_path = MODELS_DIR / "arima_model.pkl"
+    if arima_path.exists():
+        try:
+            with open(arima_path, "rb") as fh:
+                arima_mdl = pickle.load(fh)
+            fc_a = arima_mdl.get_forecast(steps=len(val))
+            raw_a = np.asarray(fc_a.predicted_mean).flatten()
+            arima_p = safe_inv_boxcox(raw_a, lambda_bc)
+            val_results["ARIMA"] = {
+                "predicted": arima_p.tolist(),
+                "residuals": (arima_p - actual_all).tolist(),
+            }
+            log.info("ARIMA validation: %d steps", len(val))
+        except Exception as exc:
+            log.warning("ARIMA validation forecast failed: %s", exc)
+
+    sarimax_path = MODELS_DIR / "sarimax_model.pkl"
+    if sarimax_path.exists():
+        try:
+            with open(sarimax_path, "rb") as fh:
+                sarimax_mdl = pickle.load(fh)
+            exog_v   = val[SARIMAX_EXOG].ffill().bfill().values
+            exog_v_s = scaler.transform(exog_v)
+            fc_s     = sarimax_mdl.get_forecast(steps=len(val), exog=exog_v_s)
+            raw_s    = np.asarray(fc_s.predicted_mean).flatten()
+            sarimax_p = safe_inv_boxcox(raw_s, lambda_bc)
+            val_results["SARIMAX"] = {
+                "predicted": sarimax_p.tolist(),
+                "residuals": (sarimax_p - actual_all).tolist(),
+            }
+            log.info("SARIMAX validation: %d steps", len(val))
+        except Exception as exc:
+            log.warning("SARIMAX validation forecast failed: %s", exc)
+
+    with open(MODELS_DIR / "validation_results.pkl", "wb") as fh:
+        pickle.dump(val_results, fh)
+    log.info("Saved validation_results.pkl (%d rows)", len(val_dates))
 
     try:
         from src.models import train_predict_prophet

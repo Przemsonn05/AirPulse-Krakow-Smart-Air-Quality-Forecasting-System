@@ -13,6 +13,59 @@ from src.utils import get_logger
 
 logger = get_logger(__name__)
 
+
+def detect_krakow_stations(data_dir: Path) -> list[str]:
+    """Scan yearly PM10 Excel files and return all unique MpKrak* station codes.
+
+    Reads only the first few rows of each file (the GIOŚ header block) so the
+    scan is fast even for large workbooks.  Returns stations sorted
+    alphabetically, with ``MpKrakWadow`` always first as the training target.
+
+    Parameters
+    ----------
+    data_dir:
+        Directory containing ``{year}_PM10_24g.xlsx`` files.
+
+    Returns
+    -------
+    list[str]
+        Deduplicated, sorted station identifiers found across all files.
+        Returns an empty list if no files are found or parsing fails.
+    """
+    found: set[str] = set()
+    data_dir = Path(data_dir)
+    xlsx_files = sorted(data_dir.glob("*_PM10_24g.xlsx"))
+    if not xlsx_files:
+        logger.warning("detect_krakow_stations: no xlsx files found in %s", data_dir)
+        return []
+
+    for path in xlsx_files:
+        try:
+            # Read only first 5 rows to locate the 'Kod stacji' header cheaply
+            df_raw = pd.read_excel(path, header=None, nrows=5)
+            header_row = None
+            for i, row in df_raw.iterrows():
+                if row.astype(str).str.contains("Kod stacji", na=False).any():
+                    header_row = i
+                    break
+            if header_row is None:
+                continue
+            df_head = pd.read_excel(path, header=header_row, nrows=0)
+            for col in df_head.columns:
+                if str(col).startswith("MpKrak"):
+                    found.add(str(col))
+        except Exception as exc:
+            logger.warning("detect_krakow_stations: could not read %s — %s", path.name, exc)
+
+    if not found:
+        return []
+
+    # MpKrakWadow is the training target — keep it first
+    target = "MpKrakWadow"
+    rest   = sorted(s for s in found if s != target)
+    return ([target] + rest) if target in found else sorted(found)
+
+
 def load_pm10_raw(data_dir: Path, years: Iterable[int]) -> pd.DataFrame:
     """Read and concatenate yearly PM10 Excel files.
 

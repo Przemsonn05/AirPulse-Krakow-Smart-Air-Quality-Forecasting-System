@@ -20,7 +20,6 @@ RUN pip install --no-cache-dir --upgrade pip wheel
 COPY requirements-frontend.txt /tmp/requirements-frontend.txt
 RUN pip install --no-cache-dir -r /tmp/requirements-frontend.txt
 
-
 FROM python:3.11-slim AS runtime
 
 LABEL maintainer="pm10-forecast"
