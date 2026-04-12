@@ -1,0 +1,17 @@
+numpy==2.3.4
+pandas==2.3.3
+scipy==1.16.2
+
+scikit-learn==1.7.2         
+lightgbm==4.6.0             
+statsmodels==0.14.6          
+shap==0.50.0                 
+
+holidays==0.89               
+joblib==1.5.2               
+
+fastapi==0.135.3
+uvicorn[standard]==0.44.0
+pydantic==2.12.4
+
+requests==2.32.5

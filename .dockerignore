@@ -1,0 +1,78 @@
+# =============================================================================
+# .dockerignore — excluded from the Docker build context
+#
+# Keeping the build context small:
+#  • speeds up `docker build` (less data sent to the daemon)
+#  • prevents secrets / large binaries from ending up in layers
+#  • ensures reproducible images (no accidental local state baked in)
+# =============================================================================
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+.venv/
+venv/
+env/
+ENV/
+
+notebooks/
+*.ipynb
+.ipynb_checkpoints/
+
+data/
+*.xlsx
+*.xls
+*.csv
+*.parquet
+*.feather
+
+models/
+
+images/
+reports/
+
+scripts/
+main.py
+
+src/
+
+tests/
+htmlcov/
+.coverage
+.coverage.*
+.pytest_cache/
+.tox/
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+.git/
+.gitignore
+.gitattributes
+
+.claude/
+.gemini/
+.cursorignore
+
+*.log
+logs/
+
+*.egg-info/
+dist/
+build/
+.pybuilder/
+
+.env
+.env.*
+*.pem
+*.key

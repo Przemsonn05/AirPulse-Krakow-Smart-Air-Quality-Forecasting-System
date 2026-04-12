@@ -1,0 +1,75 @@
+# =============================================================================
+# docker-compose.yml — PM10 Air Quality Forecasting System
+#
+# Usage:
+#   docker-compose up --build          # first run
+#   docker-compose up -d               # subsequent runs (detached)
+#   docker-compose logs -f backend     # stream backend logs
+#   docker-compose down                # stop & remove containers
+#
+# Pre-requisite: models/ directory must contain the artefacts:
+#   lgbm_model.joblib  arima_model.pkl  sarimax_model.pkl  lambda_bc.pkl
+#   (optionally: recent_history.pkl  scaler.pkl  kmeans_model.pkl  metrics.pkl)
+#
+# To regenerate artefacts:
+#   python scripts/prepare_api_artifacts.py   (run on host, not in Docker)
+# =============================================================================
+
+services:
+
+  backend:
+    build:
+      context: .                        
+      dockerfile: backend/Dockerfile
+    image: pm10-backend:latest
+    container_name: pm10-backend
+    restart: unless-stopped
+
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+
+    volumes:
+      - ./models:/app/models:ro
+
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+
+    networks:
+      - pm10-net
+
+    healthcheck:
+      test: ["CMD", "python", "/app/backend/healthcheck.py"]
+      interval:    30s  
+      timeout:     10s    
+      retries:      5    
+      start_period: 60s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: pm10-frontend:latest
+    container_name: pm10-frontend
+    restart: unless-stopped
+
+    ports:
+      - "${FRONTEND_PORT:-8501}:8501"
+
+    volumes:
+      - ./frontend:/app/frontend:ro 
+
+    environment:
+      - API_HOST=http://backend:8000
+      - STREAMLIT_SERVER_FILE_WATCHER_TYPE=poll
+
+    networks:
+      - pm10-net
+
+    depends_on:
+      backend:
+        condition: service_healthy  
+
+networks:
+  pm10-net:
+    driver: bridge
+    name: pm10-net
