@@ -449,12 +449,18 @@ class ModelService:
                 exog_row = self.scaler.transform(exog_row)
 
             try:
-                fc  = self.sarimax.forecast(steps=1, exog=exog_row)
-                raw = float(fc.iloc[0])
+                fc  = self.sarimax.get_forecast(steps=1, exog=exog_row)
+                raw = float(fc.predicted_mean.iloc[0])
+                ci  = fc.conf_int(alpha=0.10)
+                ci_arr = np.asarray(ci)
+                raw_lower = float(ci_arr[0, 0])
+                raw_upper = float(ci_arr[0, 1])
                 pm10 = float(_safe_inv_boxcox(np.array([raw]), self.lambda_bc)[0])
+                lo   = float(_safe_inv_boxcox(np.array([raw_lower]), self.lambda_bc)[0])
+                hi   = float(_safe_inv_boxcox(np.array([raw_upper]), self.lambda_bc)[0])
                 preds.append(pm10)
-                lowers.append(pm10 * 0.80)
-                uppers.append(pm10 * 1.20)
+                lowers.append(lo)
+                uppers.append(hi)
             except Exception as exc:
                 logger.warning("SARIMAX forecast failed: %s", exc)
                 preds.append(30.0); lowers.append(20.0); uppers.append(40.0)

@@ -1128,17 +1128,31 @@ def render_performance_tab() -> None:
     with st.spinner("Loading metrics…"):
         metrics_resp = _api_get("/metrics")
 
-    if "_error" in metrics_resp:
-        st.error(metrics_resp["_error"])
-        return
-
-    metrics_dict = {
+    _FALLBACK_METRICS = {
         "LightGBM": {"mae": 4.17, "rmse": 6.09, "smape": 20.3, "r2": 0.73},
         "SARIMAX":  {"mae": 6.05, "rmse": 9.08, "smape": 28.6, "r2": 0.39},
         "ARIMA":    {"mae": 6.24, "rmse": 9.39, "smape": 30.9, "r2": 0.35},
         "Prophet":  {"mae": 6.90, "rmse": 9.68, "smape": 36.2, "r2": 0.31},
     }
-    best_model = "LightGBM"
+
+    if "_error" in metrics_resp:
+        st.warning("Could not load live metrics from backend — showing cached values.")
+        metrics_dict = _FALLBACK_METRICS
+        best_model = "LightGBM"
+    else:
+        api_metrics = metrics_resp.get("metrics", {})
+        metrics_dict = {
+            name: {
+                "mae":   m.get("mae", 0),
+                "rmse":  m.get("rmse", 0),
+                "smape": m.get("smape", 0),
+                "r2":    m.get("r2"),
+            }
+            for name, m in api_metrics.items()
+        }
+        if not metrics_dict:
+            metrics_dict = _FALLBACK_METRICS
+        best_model = metrics_resp.get("best_model", "LightGBM")
 
     rows = []
     for name, m in metrics_dict.items():

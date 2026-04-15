@@ -3,8 +3,9 @@ Model evaluation: metric computation, exceedance classification,
 result comparison tables, and comparison plots.
 
 All regression metrics are computed in the original µg/m³ scale after
-inverting the Box-Cox transformation.  MAPE uses only observations with
-actual > 5 µg/m³ to avoid inflated percentage errors at very low concentrations.
+inverting the Box-Cox transformation.  SMAPE (Symmetric Mean Absolute
+Percentage Error) is used instead of MAPE for robustness: it is bounded
+[0, 200%] and does not blow up when actual values are near zero.
 """
 
 from pathlib import Path
@@ -37,9 +38,9 @@ def compute_metrics(
     """Compute regression + exceedance-classification metrics.
 
     All metrics are computed after inverting the Box-Cox transform so that
-    numbers are directly interpretable in µg/m³.  MAPE is filtered to
-    observations with actual > 5 µg/m³ to avoid division instability at low
-    concentrations.
+    numbers are directly interpretable in µg/m³.  SMAPE (Symmetric Mean
+    Absolute Percentage Error) is used as the percentage metric for
+    consistency with the API serving layer.
 
     Parameters
     ----------
@@ -58,7 +59,7 @@ def compute_metrics(
     Returns
     -------
     dict
-        Keys: ``R2``, ``MAE``, ``RMSE``, ``MAPE``,
+        Keys: ``R2``, ``MAE``, ``RMSE``, ``SMAPE``,
               ``exc_precision``, ``exc_recall``, ``exc_f1``.
     """
     mask = np.isfinite(y_true) & np.isfinite(y_pred)
@@ -69,11 +70,11 @@ def compute_metrics(
     mae  = mean_absolute_error(actual, predicted)
     rmse = np.sqrt(mean_squared_error(actual, predicted))
 
-    mape_mask = actual > 5
-    mape = (
-        np.mean(np.abs((actual[mape_mask] - predicted[mape_mask])
-                       / actual[mape_mask])) * 100
-        if mape_mask.sum() > 0 else np.nan
+    denom = np.abs(actual) + np.abs(predicted)
+    valid = denom > 0
+    smape = (
+        float(np.mean(2 * np.abs(actual[valid] - predicted[valid]) / denom[valid]) * 100)
+        if valid.sum() > 0 else np.nan
     )
 
     y_exc_true = (actual    >= eu_limit).astype(int)
@@ -90,16 +91,16 @@ def compute_metrics(
         "R2": round(r2, 4),
         "MAE": round(mae, 4),
         "RMSE": round(rmse, 4),
-        "MAPE": round(float(mape), 4),
+        "SMAPE": round(float(smape), 4),
         "exc_precision": round(exc_precision, 4),
         "exc_recall": round(exc_recall, 4),
         "exc_f1": round(exc_f1, 4),
     }
 
     logger.info(
-        "%-30s  R²=%.4f  MAE=%.2f  RMSE=%.2f  MAPE=%.1f%%  "
+        "%-30s  R²=%.4f  MAE=%.2f  RMSE=%.2f  SMAPE=%.1f%%  "
         "exc_recall=%.2f  exc_precision=%.2f",
-        label, r2, mae, rmse, float(mape),
+        label, r2, mae, rmse, float(smape),
         exc_recall, exc_precision,
     )
     return metrics
@@ -118,10 +119,10 @@ def build_metrics_table(
     -------
     pd.DataFrame
         One row per model, sorted by RMSE ascending, with columns
-        ``R2 / MAE / RMSE / MAPE / exc_precision / exc_recall / exc_f1``.
+        ``R2 / MAE / RMSE / SMAPE / exc_precision / exc_recall / exc_f1``.
     """
     table = pd.DataFrame(results).T
-    cols  = [c for c in ["R2", "MAE", "RMSE", "MAPE",
+    cols  = [c for c in ["R2", "MAE", "RMSE", "SMAPE",
                           "exc_precision", "exc_recall", "exc_f1"]
              if c in table.columns]
     return table[cols].sort_values("RMSE")
@@ -131,7 +132,7 @@ def plot_metrics_comparison(
     images_dir: Path,
     filename: str = "model_metrics_comparison.png",
 ) -> None:
-    """Three-panel bar chart: MAE, RMSE, MAPE across all models.
+    """Three-panel bar chart: MAE, RMSE, SMAPE across all models.
 
     Parameters
     ----------
@@ -155,7 +156,7 @@ def plot_metrics_comparison(
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 6))
 
-    for ax, metric in zip(axes, ["MAE", "RMSE", "MAPE"]):
+    for ax, metric in zip(axes, ["MAE", "RMSE", "SMAPE"]):
         vals     = metrics_table[metric].values.astype(float)
         best_idx = int(np.nanargmin(vals))
 

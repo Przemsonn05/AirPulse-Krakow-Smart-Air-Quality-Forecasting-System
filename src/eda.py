@@ -93,8 +93,8 @@ def plot_exceedances_and_distribution(
     ax2.legend(fontsize=11)
 
     plt.tight_layout()
-    save_figure(fig, Path(images_dir) / "eda_time_series.png")
-    logger.info("Saved eda_time_series.png (exceedances + distribution panel)")
+    save_figure(fig, Path(images_dir) / "eda_exceedances_distribution.png")
+    logger.info("Saved eda_exceedances_distribution.png")
 
 def plot_seasonal_distribution(
     df: pd.DataFrame,

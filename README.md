@@ -342,11 +342,11 @@ This section assesses how well each of the four trained models generalises to th
 | **R²** | 1 − SS_res / SS_tot | Overall variance explained; 1 is perfect |
 | **MAE** | mean(\|y − ŷ\|) | Average absolute error in µg/m³; robust to outliers |
 | **RMSE** | √mean((y − ŷ)²) | Penalises large errors more heavily; sensitive to smog peaks |
-| **MAPE** | Mean Absolute Percentage Error | Relative error measure; sensitive to low-concentration days |
+| **SMAPE** | Symmetric Mean Absolute Percentage Error | Relative error measure; bounded [0, 200%], robust near zero |
 
 ### Validation set results (2023)
 
-| Model | MAE (µg/m³) | RMSE (µg/m³) | MAPE (%) | R² |
+| Model | MAE (µg/m³) | RMSE (µg/m³) | SMAPE (%) | R² |
 |---|---|---|---|---|
 | **LightGBM** | **4.21** | **6.09** | **20.32** | **0.7250** |
 | SARIMAX | 6.05 | 9.08 | 28.61 | 0.3889 |
@@ -381,7 +381,7 @@ LightGBM was the **only model to exceed the Naïve Persistence baseline** in exc
 
 ![Model metrics comparison](images/model_comparison_neutral.png)
 
-The model comparison bar chart presents the core regression metrics — MAE, RMSE, MAPE, and R² — for all evaluated models on the 2023 validation set, displayed side by side for direct comparison. 
+The model comparison bar chart presents the core regression metrics — MAE, RMSE, SMAPE, and R² — for all evaluated models on the 2023 validation set, displayed side by side for direct comparison. 
 
 - LightGBM achieves the best result across every metric (MAE 4.21 µg/m³, RMSE 6.09 µg/m³, R² 0.73), outperforming the statistical baselines by approximately 30–40% on MAE. 
 
@@ -401,7 +401,7 @@ The forecast comparison chart overlays actual PM10 observations (black line) wit
 
 - SARIMAX shows broader residuals on extreme winter peaks but generally captures the seasonally elevated base level with reasonable fidelity, and its confidence intervals provide useful uncertainty bounds for operational use. 
 
-- Prophet produces smoother forecasts that follow the expected seasonal shape but are less reactive to sudden shifts, contributing to its higher MAPE. ARIMA tends to underestimate sharp pollution spikes — especially multi-day smog episodes — because it lacks the non-linear interactions between weather variables and emissions that LightGBM exploits through its gradient-boosted tree structure. 
+- Prophet produces smoother forecasts that follow the expected seasonal shape but are less reactive to sudden shifts, contributing to its higher SMAPE. ARIMA tends to underestimate sharp pollution spikes — especially multi-day smog episodes — because it lacks the non-linear interactions between weather variables and emissions that LightGBM exploits through its gradient-boosted tree structure. 
 
 The 50 µg/m³ EU threshold is shown as a horizontal reference line, making it straightforward to assess visually which models correctly anticipate limit exceedances and which miss them.
 
@@ -500,7 +500,7 @@ One-click download of the current forecast as a structured PDF generated with `r
 
 ### Model Performance tab
 
-- Metrics table (MAE, RMSE, MAPE, R²) fetched live from `/metrics`; best model highlighted in green
+- Metrics table (MAE, RMSE, SMAPE, R²) fetched live from `/metrics`; best model highlighted in green
 - Bar chart comparing all models across all metrics
 - Descriptive analysis of LightGBM's advantage over statistical baselines
 
