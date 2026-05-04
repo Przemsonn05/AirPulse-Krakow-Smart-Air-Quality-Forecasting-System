@@ -7,12 +7,9 @@ of it, so we pin down the exact behaviour for a few controlled inputs.
 """
 
 from __future__ import annotations
-
 import numpy as np
 from scipy.stats import boxcox
-
 from src.evaluation import compute_metrics
-
 
 def test_perfect_prediction_gives_zero_error_and_r2_one():
     raw = np.linspace(10.0, 80.0, 80)
@@ -25,7 +22,6 @@ def test_perfect_prediction_gives_zero_error_and_r2_one():
     assert m["SMAPE"] == 0.0
     assert m["R2"] == 1.0
 
-
 def test_metric_keys_are_complete():
     raw = np.linspace(10.0, 80.0, 60)
     transformed, lam = boxcox(raw)
@@ -36,7 +32,6 @@ def test_metric_keys_are_complete():
     expected = {"R2", "MAE", "RMSE", "SMAPE", "exc_precision", "exc_recall", "exc_f1"}
     assert expected.issubset(m.keys())
 
-
 def test_exceedance_metrics_flag_threshold_crossings():
     """If ground truth has exceedances and predictions mirror them, F1 → 1.0."""
     raw_true = np.array([20.0, 30.0, 55.0, 70.0, 15.0, 60.0])
@@ -44,7 +39,7 @@ def test_exceedance_metrics_flag_threshold_crossings():
 
     stacked = np.concatenate([raw_true, raw_pred])
     _, lam = boxcox(stacked)
-    from src.utils import safe_inv_boxcox  # noqa: F401
+    from src.utils import safe_inv_boxcox
 
     from scipy.special import boxcox as _fwd
     y_true_bc = _fwd(raw_true, lam)
@@ -55,7 +50,6 @@ def test_exceedance_metrics_flag_threshold_crossings():
     assert m["exc_precision"] == 1.0
     assert m["exc_recall"] == 1.0
     assert m["exc_f1"] == 1.0
-
 
 def test_nonfinite_inputs_are_ignored():
     raw = np.linspace(10.0, 80.0, 30)

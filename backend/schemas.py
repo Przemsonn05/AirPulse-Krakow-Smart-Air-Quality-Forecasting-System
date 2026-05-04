@@ -4,10 +4,8 @@ All numeric fields include sensible validation bounds for Kraków's climate.
 """
 
 from __future__ import annotations
-
 from datetime import date
 from typing import Optional
-
 from pydantic import BaseModel, Field, field_validator
 from config.config import STATIONS_META
 

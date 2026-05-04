@@ -8,11 +8,8 @@ with a real Anthropic / OpenAI call when an API key is available.
 """
 
 from __future__ import annotations
-
 import math
 from datetime import date
-
-
 
 _SUMMARY_TEMPLATES = {
     "Good": (
@@ -42,26 +39,26 @@ _SUMMARY_TEMPLATES = {
 }
 
 _RECOMMENDATIONS = {
-    "Good":     "Enjoy outdoor activities freely.",
+    "Good": "Enjoy outdoor activities freely.",
     "Moderate": "Sensitive groups (asthmatics, elderly, children) may wish to reduce prolonged outdoor exertion.",
-    "High":     "All residents should limit outdoor exercise. Consider wearing a face mask (FFP2/N95) if outdoors.",
+    "High": "All residents should limit outdoor exercise. Consider wearing a face mask (FFP2/N95) if outdoors.",
     "Very High": "Stay indoors with windows closed. Use air purifiers if available. Follow official health advisories.",
 }
 
 _DRIVER_LABELS = {
-    "lag_1d":               "high PM10 carry-over from yesterday",
-    "lag_7d":               "persistent elevated PM10 this week",
-    "is_heating_season":    "active heating season (coal/biomass combustion)",
-    "is_calm_wind":         "very low wind speed (poor dispersion)",
-    "hdd_calm":             "cold + calm conditions (heating + stagnation)",
-    "inversion_proxy":      "likely temperature inversion trapping pollutants",
-    "temp_avg":             "low temperature driving heating demand",
-    "wind_max":             "weak maximum winds limiting dispersion",
-    "rain_3d_sum":          "little recent rainfall (no wet deposition)",
-    "dry_spell_days":       "extended dry period (dust accumulation)",
-    "rolling_mean_7d":      "elevated 7-day PM10 background",
-    "humidity_avg":         "high humidity enhancing aerosol formation",
-    "pressure_avg":         "high atmospheric pressure suppressing vertical mixing",
+    "lag_1d": "high PM10 carry-over from yesterday",
+    "lag_7d": "persistent elevated PM10 this week",
+    "is_heating_season": "active heating season (coal/biomass combustion)",
+    "is_calm_wind": "very low wind speed (poor dispersion)",
+    "hdd_calm": "cold + calm conditions (heating + stagnation)",
+    "inversion_proxy": "likely temperature inversion trapping pollutants",
+    "temp_avg": "low temperature driving heating demand",
+    "wind_max": "weak maximum winds limiting dispersion",
+    "rain_3d_sum": "little recent rainfall (no wet deposition)",
+    "dry_spell_days": "extended dry period (dust accumulation)",
+    "rolling_mean_7d": "elevated 7-day PM10 background",
+    "humidity_avg": "high humidity enhancing aerosol formation",
+    "pressure_avg": "high atmospheric pressure suppressing vertical mixing",
 }
 
 
@@ -91,12 +88,12 @@ class InterpretabilityService:
         -------
         dict with keys: summary, risk_level, key_drivers, recommendation
         """
-        drivers     = self._top_driver_labels(feature_contributions, weather, pm10_level)
+        drivers = self._top_driver_labels(feature_contributions, weather, pm10_level)
         drivers_str = self._drivers_sentence(drivers)
-        times       = pm10 / 50.0
+        times = pm10 / 50.0
 
         template = _SUMMARY_TEMPLATES.get(pm10_level, _SUMMARY_TEMPLATES["Moderate"])
-        summary  = template.format(
+        summary = template.format(
             level=pm10_level.lower(),
             date=forecast_date.strftime("%A, %d %B %Y"),
             pm10=pm10,
@@ -105,12 +102,11 @@ class InterpretabilityService:
         )
 
         return {
-            "summary":       summary,
-            "risk_level":    pm10_level,
-            "key_drivers":   drivers,
+            "summary": summary,
+            "risk_level": pm10_level,
+            "key_drivers": drivers,
             "recommendation": _RECOMMENDATIONS.get(pm10_level, "Monitor official advisories."),
         }
-
 
     @staticmethod
     def _top_driver_labels(

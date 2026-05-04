@@ -25,7 +25,6 @@ def _detect_stations() -> tuple[list[str], list[str]]:
             return all_s, aux
     except Exception:
         pass
-    # Original fallback
     fallback = ["MpKrakWadow", "MpKrakSwoszo", "MpKrakBujaka", "MpKrakBulwar"]
     return fallback, [s for s in fallback if s != TARGET]
 
@@ -33,12 +32,10 @@ STATIONS, AUX_STATIONS = _detect_stations()
 PM10_BC_COL     = "PM10_transformed"     
 
 YEARS = range(2019, 2025)
-
 TRAIN_END = "2022-12-31"  
 VAL_END   = "2023-12-31"   
 
 WEATHER_API_URL = "https://archive-api.open-meteo.com/v1/archive"
-
 WEATHER_PARAMS = {
     "latitude":   50.0577717,
     "longitude":  19.9265492,

@@ -14,16 +14,13 @@ Run:
 """
 
 from __future__ import annotations
-
 import logging
 import sys
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
-
 import pandas as pd
-
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -70,8 +67,6 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    # allow_origins=["*"] is intentional for this public demo deployment.
-    # In a production setup this should be restricted to specific origins.
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],

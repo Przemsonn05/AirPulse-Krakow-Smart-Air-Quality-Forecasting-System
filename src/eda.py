@@ -9,7 +9,6 @@ All plots mirror the notebook's EDA sections (cells 25–56).
 
 import calendar
 from pathlib import Path
-
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
 import matplotlib.patches as mpatches
@@ -19,7 +18,6 @@ import pandas as pd
 import seaborn as sns
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from statsmodels.tsa.seasonal import STL
-
 from src.utils import get_logger, save_figure, set_plot_style
 
 logger = get_logger(__name__)

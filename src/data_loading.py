@@ -4,11 +4,9 @@ Data loading: PM10 Excel files and weather data from the Open-Meteo archive API.
 
 from pathlib import Path
 from typing import Iterable
-
 import numpy as np
 import pandas as pd
 import requests
-
 from src.utils import get_logger
 
 logger = get_logger(__name__)
@@ -41,7 +39,6 @@ def detect_krakow_stations(data_dir: Path) -> list[str]:
 
     for path in xlsx_files:
         try:
-            # Read only first 5 rows to locate the 'Kod stacji' header cheaply
             df_raw = pd.read_excel(path, header=None, nrows=5)
             header_row = None
             for i, row in df_raw.iterrows():
@@ -60,11 +57,9 @@ def detect_krakow_stations(data_dir: Path) -> list[str]:
     if not found:
         return []
 
-    # MpKrakWadow is the training target — keep it first
     target = "MpKrakWadow"
     rest   = sorted(s for s in found if s != target)
     return ([target] + rest) if target in found else sorted(found)
-
 
 def load_pm10_raw(data_dir: Path, years: Iterable[int]) -> pd.DataFrame:
     """Read and concatenate yearly PM10 Excel files.
@@ -107,7 +102,6 @@ def load_pm10_raw(data_dir: Path, years: Iterable[int]) -> pd.DataFrame:
     combined = pd.concat(frames, ignore_index=True)
     logger.info("Loaded %d rows across %d files", len(combined), len(frames))
     return combined
-
 
 def parse_pm10_stations(
     raw: pd.DataFrame,

@@ -23,7 +23,6 @@ from sklearn.metrics import (
     recall_score,
     f1_score,
 )
-
 from src.utils import get_logger, safe_inv_boxcox, save_figure, set_plot_style
 
 logger = get_logger(__name__)
@@ -146,18 +145,18 @@ def plot_metrics_comparison(
     set_plot_style()
 
     COLORS = {
-        "ARIMA":  "#6396E7",
+        "ARIMA": "#6396E7",
         "SARIMAX": "#64748B",
         "Prophet": "#66D1B6",
         "LightGBM": "#4B9965",
     }
     model_names = list(metrics_table.index)
-    bar_colors  = [COLORS.get(m, "#999999") for m in model_names]
+    bar_colors = [COLORS.get(m, "#999999") for m in model_names]
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 6))
 
     for ax, metric in zip(axes, ["MAE", "RMSE", "SMAPE"]):
-        vals     = metrics_table[metric].values.astype(float)
+        vals = metrics_table[metric].values.astype(float)
         best_idx = int(np.nanargmin(vals))
 
         bars = ax.bar(model_names, vals, color=bar_colors, alpha=0.9, width=0.5)

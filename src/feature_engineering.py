@@ -15,7 +15,6 @@ import holidays
 import numpy as np
 import pandas as pd
 from scipy.stats import boxcox
-
 from src.utils import get_logger
 
 logger = get_logger(__name__)
@@ -101,9 +100,9 @@ def add_calendar_features(
 
     df["season"] = df["month"].map({
         12: "Winter", 1: "Winter",  2: "Winter",
-        3:  "Spring", 4: "Spring",  5: "Spring",
-        6:  "Summer", 7: "Summer",  8: "Summer",
-        9:  "Autumn", 10: "Autumn", 11: "Autumn",
+        3: "Spring", 4: "Spring",  5: "Spring",
+        6: "Summer", 7: "Summer",  8: "Summer",
+        9: "Autumn", 10: "Autumn", 11: "Autumn",
     })
 
     df["is_heating_season"] = df["month"].isin(heating_months).astype(int)
@@ -285,8 +284,8 @@ def add_weather_features(df: pd.DataFrame) -> pd.DataFrame:
     df["hdd_7d"] = df["heating_degree_days"].shift(1).rolling(7).sum()
 
     df["rain_yesterday"] = df["rain_sum"].shift(1)
-    df["rain_3d_sum"]    = df["rain_sum"].shift(1).rolling(3, min_periods=1).sum()
-    df["rain_7d_sum"]    = df["rain_sum"].shift(1).rolling(7, min_periods=1).sum()
+    df["rain_3d_sum"] = df["rain_sum"].shift(1).rolling(3, min_periods=1).sum()
+    df["rain_7d_sum"] = df["rain_sum"].shift(1).rolling(7, min_periods=1).sum()
     df["dry_spell_days"] = (
         df["rain_sum"].shift(1)
         .rolling(14)

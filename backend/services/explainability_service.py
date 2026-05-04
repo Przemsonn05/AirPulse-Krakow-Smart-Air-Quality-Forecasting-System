@@ -6,15 +6,12 @@ Falls back to native LightGBM gain-importance when SHAP is unavailable.
 """
 
 from __future__ import annotations
-
 import logging
 from typing import Optional
-
 import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
-
 
 class ExplainabilityService:
     """Computes per-prediction SHAP values for a fitted LightGBM model."""
@@ -40,7 +37,6 @@ class ExplainabilityService:
         except Exception as exc:
             logger.warning("SHAP initialisation failed: %s", exc)
 
-
     def explain(
         self, X: pd.DataFrame
     ) -> tuple[list[dict], Optional[float]]:
@@ -62,15 +58,13 @@ class ExplainabilityService:
         else:
             return self._gain_contributions(X), None
 
-
     def _shap_contributions(
         self, X: pd.DataFrame
     ) -> tuple[list[dict], float]:
         import shap as _shap
 
-        sv   = self._explainer.shap_values(X)
+        sv = self._explainer.shap_values(X)
         base = float(self._explainer.expected_value)
-
         contribs = pd.Series(sv[0], index=X.columns)
         top = (
             contribs.abs()
@@ -80,8 +74,8 @@ class ExplainabilityService:
 
         result = [
             {
-                "feature":      feat,
-                "value":        float(X[feat].iloc[0]),
+                "feature": feat,
+                "value": float(X[feat].iloc[0]),
                 "contribution": float(contribs[feat]),
             }
             for feat in top.index
@@ -90,9 +84,9 @@ class ExplainabilityService:
 
     def _gain_contributions(self, X: pd.DataFrame) -> list[dict]:
         """Use LightGBM gain importance as a proxy when SHAP is unavailable."""
-        booster   = self.model.booster_
+        booster = self.model.booster_
         gain_vals = booster.feature_importance(importance_type="gain")
-        names     = self.model.feature_name_
+        names = self.model.feature_name_
 
         importance = pd.Series(gain_vals, index=names)
         top = importance.sort_values(ascending=False).head(self.top_n)
@@ -100,8 +94,8 @@ class ExplainabilityService:
         scale = top.sum() or 1.0
         result = [
             {
-                "feature":      feat,
-                "value":        float(X[feat].iloc[0]) if feat in X.columns else 0.0,
+                "feature": feat,
+                "value": float(X[feat].iloc[0]) if feat in X.columns else 0.0,
                 "contribution": float(importance[feat] / scale),
             }
             for feat in top.index

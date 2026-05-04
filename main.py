@@ -12,9 +12,7 @@ Each stage is a thin wrapper around the corresponding src/ module.
 
 import argparse
 import sys
-
 import pandas as pd
-
 from src import config
 from src.data_loading import fetch_weather, load_pm10_raw, parse_pm10_stations
 from src.data_preprocessing import impute_gaps, merge_weather
@@ -114,7 +112,6 @@ def stage_load() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     )
     return raw_pm10, pm10, weather
 
-
 def stage_preprocess(
     pm10: pd.DataFrame,
     weather: pd.DataFrame,
@@ -126,7 +123,6 @@ def stage_preprocess(
     merged = merge_weather(pm10, weather)
     return merged
 
-
 def stage_eda(df: pd.DataFrame) -> None:
     """Generate and save all EDA visualisations."""
     logger.info("=== STAGE 3: EDA ===")
@@ -137,7 +133,6 @@ def stage_eda(df: pd.DataFrame) -> None:
         all_stations=config.STATIONS,
         eu_limit=config.EU_PM10_DAILY_LIMIT,
     )
-
 
 def stage_features(df: pd.DataFrame) -> tuple[pd.DataFrame, float]:
     """Build all features; Box-Cox lambda fitted on training split only."""
@@ -152,14 +147,12 @@ def stage_features(df: pd.DataFrame) -> tuple[pd.DataFrame, float]:
         rolling_windows=config.ROLLING_WINDOWS,
     )
 
-
 def stage_split(
     df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Chronological date-based train / val / test split."""
     logger.info("=== STAGE 5: Train/Val/Test Split ===")
     return date_split(df, config.TRAIN_END, config.VAL_END)
-
 
 def stage_train(
     train: pd.DataFrame,
@@ -183,7 +176,7 @@ def stage_train(
             refit_every=config.REFIT_EVERY,
         )
         predictions["ARIMA"] = preds
-        results["ARIMA"]     = compute_metrics(
+        results["ARIMA"] = compute_metrics(
             val[config.PM10_BC_COL].values, preds, lambda_bc, "ARIMA",
             eu_limit=config.EU_PM10_DAILY_LIMIT,
         )
@@ -234,7 +227,6 @@ def stage_train(
 
     return predictions, results, lgbm_model
 
-
 def stage_evaluate(
     val: pd.DataFrame,
     predictions: dict,
@@ -269,7 +261,6 @@ def main() -> None:
     args = parse_args()
 
     raw_pm10, pm10, weather = stage_load()
-
     df_merged = stage_preprocess(pm10, weather)
 
     if not args.skip_eda:
@@ -278,7 +269,6 @@ def main() -> None:
         logger.info("EDA skipped (--skip-eda)")
 
     df_features, lambda_bc = stage_features(df_merged)
-
     train, val, test = stage_split(df_features)
 
     run_sanity_checks(raw_pm10, df_merged, df_features, train, val, test)

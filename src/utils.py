@@ -46,7 +46,6 @@ def set_plot_style() -> None:
         "axes.labelsize": 12,
     })
 
-
 def save_figure(fig: plt.Figure, path: Path, dpi: int = 150) -> None:
     """Save a matplotlib figure and close it.
 
@@ -101,7 +100,6 @@ def safe_inv_boxcox(
     out = np.asarray(inv_boxcox(y, lambda_bc), dtype=float)
     out = np.nan_to_num(out, nan=clip_min, posinf=clip_max, neginf=clip_min)
     return np.clip(out, clip_min, clip_max)
-
 
 def inverse_boxcox_transform(values: np.ndarray, lambda_bc: float) -> np.ndarray:
     """Alias for :func:`safe_inv_boxcox` with default clip bounds."""

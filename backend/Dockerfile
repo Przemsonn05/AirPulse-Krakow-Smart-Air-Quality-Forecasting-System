@@ -1,9 +1,3 @@
-# =============================================================================
-# backend/Dockerfile — FastAPI model-serving layer
-# Multi-stage build:  builder installs all deps (needs gcc/g++ for native exts)
-#                     runtime copies only the venv — no build tools ship to prod
-# =============================================================================
-
 FROM python:3.11-slim AS builder
 
 RUN apt-get update \

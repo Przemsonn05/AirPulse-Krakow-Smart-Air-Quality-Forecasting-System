@@ -9,13 +9,10 @@ Covers the two helpers that are critical for correctness:
 """
 
 from __future__ import annotations
-
 import numpy as np
 import pandas as pd
 from scipy.stats import boxcox
-
 from src.utils import date_split, safe_inv_boxcox
-
 
 def test_date_split_is_strictly_chronological():
     idx = pd.date_range("2020-01-01", "2023-12-31", freq="D")
@@ -28,7 +25,6 @@ def test_date_split_is_strictly_chronological():
     assert val.index.max() <= pd.Timestamp("2023-06-30")
     assert test.index.min() > pd.Timestamp("2023-06-30")
 
-
 def test_date_split_partitions_are_disjoint_and_complete():
     idx = pd.date_range("2020-01-01", "2023-12-31", freq="D")
     df = pd.DataFrame({"x": np.arange(len(idx))}, index=idx)
@@ -39,7 +35,6 @@ def test_date_split_partitions_are_disjoint_and_complete():
     assert len(joined) == len(df)
     assert not joined.index.has_duplicates
 
-
 def test_safe_inv_boxcox_round_trip_is_close():
     raw = np.array([5.0, 12.0, 23.4, 45.1, 78.0, 110.0])
     transformed, lam = boxcox(raw)
@@ -47,7 +42,6 @@ def test_safe_inv_boxcox_round_trip_is_close():
     recovered = safe_inv_boxcox(transformed, lam)
 
     np.testing.assert_allclose(recovered, raw, rtol=1e-6)
-
 
 def test_safe_inv_boxcox_clips_physical_range():
     """Extreme Box-Cox inputs must not explode — concentrations are non-negative and bounded."""
@@ -59,7 +53,6 @@ def test_safe_inv_boxcox_clips_physical_range():
     assert np.all(y >= 0.0)
     assert np.all(y <= 500.0)
     assert np.all(np.isfinite(y))
-
 
 def test_safe_inv_boxcox_respects_custom_bounds():
     lam = 0.0

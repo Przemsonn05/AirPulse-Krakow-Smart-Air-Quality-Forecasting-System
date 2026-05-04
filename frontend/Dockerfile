@@ -1,10 +1,3 @@
-# =============================================================================
-# frontend/Dockerfile — Streamlit dashboard
-# Multi-stage build:  builder installs deps, runtime ships only the venv.
-# This image is intentionally lightweight — no ML libraries, no models.
-# All data comes from REST calls to the backend service.
-# =============================================================================
-
 FROM python:3.11-slim AS builder
 
 RUN apt-get update \

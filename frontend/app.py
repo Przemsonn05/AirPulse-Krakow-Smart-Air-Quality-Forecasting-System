@@ -1,16 +1,13 @@
 from __future__ import annotations
-
 import io
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import requests
 import streamlit as st
-
 try:
     from reportlab.lib import colors as rl_colors
     from reportlab.lib.pagesizes import A4
@@ -30,7 +27,6 @@ from config.config import (
     COLOR_LGBM, COLOR_SARIMAX, COLOR_ARIMA, COLOR_NAIVE,
 )
 
-# Fixed city-centre coordinates used by the live-weather fetch (weather is shared across stations)
 _LAT = 50.0577
 _LON = 19.9265
 
@@ -283,39 +279,36 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
-# ── Colour helpers ──────────────────────────────────────────────────────────
-
 def pm10_color(pm10: float) -> str:
-    if pm10 < PM10_GOOD:     return "#2ecc71"
+    if pm10 < PM10_GOOD: return "#2ecc71"
     if pm10 < PM10_MODERATE: return "#f1c40f"
-    if pm10 < PM10_HIGH:     return "#e67e22"
+    if pm10 < PM10_HIGH: return "#e67e22"
     return "#e74c3c" 
 
 
 def pm10_emoji(pm10: float) -> str:
-    if pm10 < PM10_GOOD:     return "🟢"
+    if pm10 < PM10_GOOD: return "🟢"
     if pm10 < PM10_MODERATE: return "🟡"
-    if pm10 < PM10_HIGH:     return "🟠"
+    if pm10 < PM10_HIGH: return "🟠"
     return "🔴"
 
 
 MODEL_COLORS = {
     "LightGBM": COLOR_LGBM,
-    "SARIMAX":  COLOR_SARIMAX,
-    "ARIMA":    COLOR_ARIMA,
+    "SARIMAX": COLOR_SARIMAX,
+    "ARIMA": COLOR_ARIMA,
 }
 
 MODEL_DESCRIPTIONS = {
     "LightGBM": "Gradient boosting - most accurate, supports SHAP explainability",
-    "SARIMAX":  "Seasonal model with exogenous weather variables",
-    "ARIMA":    "Classical time-series model, used as baseline",
+    "SARIMAX": "Seasonal model with exogenous weather variables",
+    "ARIMA": "Classical time-series model, used as baseline",
 }
 
 LEVEL_COLORS = {
-    "Good":      "#2ecc71",
-    "Moderate":  "#f1c40f",
-    "High":      "#e67e22",
+    "Good": "#2ecc71",
+    "Moderate": "#f1c40f",
+    "High": "#e67e22",
     "Very High": "#e74c3c",
 }
 
@@ -325,9 +318,6 @@ _CHART_LAYOUT = dict(
     font_color="rgba(255,255,255,0.8)",
     xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
 )
-
-
-# ── Data-fetching helpers ───────────────────────────────────────────────────
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_live_weather() -> dict:
@@ -351,38 +341,36 @@ def fetch_live_weather() -> dict:
         r.raise_for_status()
         cur = r.json().get("current", {})
         return {
-            "temp_avg":     float(cur.get("temperature_2m",      5.0)),
-            "wind_max":     float(cur.get("wind_gusts_10m",       6.0)),
-            "wind_mean":    float(cur.get("wind_speed_10m",       3.0)),
+            "temp_avg": float(cur.get("temperature_2m", 5.0)),
+            "wind_max": float(cur.get("wind_gusts_10m", 6.0)),
+            "wind_mean": float(cur.get("wind_speed_10m", 3.0)),
             "humidity_avg": float(cur.get("relative_humidity_2m", 75.0)),
-            "pressure_avg": float(cur.get("surface_pressure",    1013.0)),
-            "rain_sum":     float(cur.get("precipitation",        0.0)),
-            "snowfall_sum": float(cur.get("snowfall",             0.0)),
-            "_source":     "Open-Meteo (live)",
+            "pressure_avg": float(cur.get("surface_pressure", 1013.0)),
+            "rain_sum": float(cur.get("precipitation", 0.0)),
+            "snowfall_sum": float(cur.get("snowfall", 0.0)),
+            "_source": "Open-Meteo (live)",
             "_fetched_at": datetime.now().strftime("%H:%M"),
-            "_ok":         True,
+            "_ok": True,
         }
     except Exception:
-        month   = datetime.now().month
+        month = datetime.now().month
         heating = month in [10, 11, 12, 1, 2, 3]
         return {
-            "temp_avg":     3.0 if heating else 18.0,
-            "wind_max":     6.0,
-            "wind_mean":    3.0,
+            "temp_avg": 3.0 if heating else 18.0,
+            "wind_max": 6.0,
+            "wind_mean": 3.0,
             "humidity_avg": 80.0 if heating else 65.0,
             "pressure_avg": 1013.0,
-            "rain_sum":     0.0,
+            "rain_sum": 0.0,
             "snowfall_sum": 0.0,
-            "_source":     "Seasonal defaults (Open-Meteo unavailable)",
+            "_source": "Seasonal defaults (Open-Meteo unavailable)",
             "_fetched_at": None,
-            "_ok":         False,
+            "_ok": False,
         }
-
 
 def _clean_weather(w: dict) -> dict:
     """Strip internal metadata keys (prefixed with '_') before sending to API."""
     return {k: v for k, v in w.items() if not k.startswith("_")}
-
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_pm10_history(days: int = 7, lat: float = 50.0577, lon: float = 19.9265) -> tuple[list, list, bool]:
@@ -426,9 +414,6 @@ def fetch_pm10_history(days: int = 7, lat: float = 50.0577, lon: float = 19.9265
         vals    = np.clip(base + rng.normal(0, 8, days), 2.0, 150.0).tolist()
         return dates, vals, False
 
-
-# ── In-process service layer (replaces HTTP calls to FastAPI) ───────────────
-
 @st.cache_resource(show_spinner="Loading models…")
 def _get_services():
     from backend.services.model_service import get_model_service
@@ -451,10 +436,10 @@ def _api_get(endpoint: str) -> dict:
             "status": "ok",
             "models": {
                 "LightGBM": svc.lgbm is not None,
-                "ARIMA":    svc.arima is not None,
-                "SARIMAX":  svc.sarimax is not None,
+                "ARIMA": svc.arima is not None,
+                "SARIMAX": svc.sarimax is not None,
             },
-            "lambda_bc":    svc.lambda_bc,
+            "lambda_bc": svc.lambda_bc,
             "history_rows": len(svc.history) if svc.history is not None else 0,
         }
 
@@ -471,7 +456,6 @@ def _api_get(endpoint: str) -> dict:
         return svc.validation_results
 
     return {"_error": f"Unknown endpoint: {endpoint}"}
-
 
 def _api_post(endpoint: str, payload: dict) -> dict:
     from backend.services.model_service import _compute_lgbm_features, _pm10_level, _trend_label
@@ -497,19 +481,19 @@ def _api_post(endpoint: str, payload: dict) -> dict:
             for i, pm10 in enumerate(points):
                 dt = fdate + _td(days=i)
                 forecasts.append({
-                    "date":       str(dt),
-                    "pm10":       round(pm10, 2),
+                    "date": str(dt),
+                    "pm10": round(pm10, 2),
                     "pm10_lower": round(lowers[i], 2) if lowers else None,
                     "pm10_upper": round(uppers[i], 2) if uppers else None,
                 })
             cluster = svc.classify_regime(payload["weather"])
-            regime  = REGIME_LABELS.get(cluster, "Moderate")
+            regime = REGIME_LABELS.get(cluster, "Moderate")
             return {
-                "model_name":   payload["model_name"],
-                "forecasts":    forecasts,
-                "trend":        _trend_label(points),
-                "regime":       regime,
-                "pm10_level":   _pm10_level(points[0]),
+                "model_name": payload["model_name"],
+                "forecasts": forecasts,
+                "trend": _trend_label(points),
+                "regime": regime,
+                "pm10_level":  _pm10_level(points[0]),
                 "regime_color": REGIME_COLORS.get(regime, "#888888"),
             }
         except Exception as exc:
@@ -572,9 +556,6 @@ def _backend_ok() -> bool:
 def _fetch_validation() -> dict:
     return _api_get("/validation")
 
-
-# ── Sidebar ─────────────────────────────────────────────────────────────────
-
 def render_sidebar() -> tuple[str, str, int, date, dict]:
     weather_raw = fetch_live_weather()
     weather     = _clean_weather(weather_raw)
@@ -616,10 +597,9 @@ def render_sidebar() -> tuple[str, str, int, date, dict]:
 
         st.divider()
 
-        # Live weather display - no manual sliders
-        src      = weather_raw.get("_source", "")
-        fetched  = weather_raw.get("_fetched_at")
-        is_live  = weather_raw.get("_ok", False)
+        src = weather_raw.get("_source", "")
+        fetched = weather_raw.get("_fetched_at")
+        is_live = weather_raw.get("_ok", False)
 
         st.markdown("<div class='section-label'>Live Weather - Kraków</div>", unsafe_allow_html=True)
 
@@ -652,17 +632,13 @@ def render_sidebar() -> tuple[str, str, int, date, dict]:
 
     return station_id, model, horizon, fdate, weather
 
-
-# ── Gauge & utilities ───────────────────────────────────────────────────────
-
 def _estimate_3d_avg(fdate: date, weather: dict) -> float:
-    heating     = fdate.month in [10, 11, 12, 1, 2, 3]
-    base        = 48.0 if heating else 17.0
+    heating = fdate.month in [10, 11, 12, 1, 2, 3]
+    base = 48.0 if heating else 17.0
     wind_factor = max(0.35, 1.0 - weather.get("wind_mean", 3) / 22)
     rain_factor = max(0.65, 1.0 - weather.get("rain_sum",  0) / 35)
     temp_factor = 1.0 + max(0.0, -weather.get("temp_avg", 5)) / 28
     return round(base * wind_factor * rain_factor * temp_factor, 1)
-
 
 def _render_gauge(pm10: float, level: str, ref_3d_avg: float = 50.0) -> None:
     color = pm10_color(pm10)
@@ -672,19 +648,19 @@ def _render_gauge(pm10: float, level: str, ref_3d_avg: float = 50.0) -> None:
         delta={
             "reference":   ref_3d_avg,
             "valueformat": ".1f",
-            "increasing":  {"color": "#e74c3c"},
-            "decreasing":  {"color": "#2ecc71"},
+            "increasing": {"color": "#e74c3c"},
+            "decreasing": {"color": "#2ecc71"},
         },
         number={"suffix": " µg/m³", "font": {"size": 30, "family": "DM Sans"}},
         gauge={
             "axis": {"range": [0, 200], "tickwidth": 1, "tickcolor": "rgba(255,255,255,0.3)"},
             "bar":  {"color": color, "thickness": 0.3},
-            "bgcolor":     "rgba(0,0,0,0)",
+            "bgcolor": "rgba(0,0,0,0)",
             "bordercolor": "rgba(255,255,255,0.1)",
             "steps": [
-                {"range": [0,   25],  "color": "rgba(46,204,113,0.15)"},
-                {"range": [25,  50],  "color": "rgba(241,196,15,0.15)"},
-                {"range": [50,  100], "color": "rgba(230,126,34,0.15)"},
+                {"range": [0, 25],  "color": "rgba(46,204,113,0.15)"},
+                {"range": [25, 50],  "color": "rgba(241,196,15,0.15)"},
+                {"range": [50, 100], "color": "rgba(230,126,34,0.15)"},
                 {"range": [100, 200], "color": "rgba(231,76,60,0.15)"},
             ],
             "threshold": {
@@ -710,19 +686,16 @@ def _render_gauge(pm10: float, level: str, ref_3d_avg: float = 50.0) -> None:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-
-# ── Forecast tab ─────────────────────────────────────────────────────────────
-
 def render_forecast_tab(station_id: str, model: str, horizon: int, fdate: date, weather: dict) -> None:
     station_meta = STATIONS_META.get(station_id, STATIONS_META["MpKrakWadow"])
     station_name = station_meta["name"]
 
     payload_1d = {
-        "model_name":    model,
+        "model_name": model,
         "forecast_date": str(fdate),
-        "weather":       weather,
-        "horizon":       1,
-        "station_id":    station_id,
+        "weather": weather,
+        "horizon": 1,
+        "station_id": station_id,
     }
     pred_data = _api_post("/predict", payload_1d)
     pm10_now  = pred_data["forecasts"][0]["pm10"] if "_error" not in pred_data else 35.0
@@ -755,7 +728,7 @@ def render_forecast_tab(station_id: str, model: str, horizon: int, fdate: date, 
                 "is_target": is_target, "tip": tip_label,
             })
 
-        df_map    = pd.DataFrame(rows)
+        df_map = pd.DataFrame(rows)
         df_others = df_map[~df_map["is_target"]]
         df_target = df_map[df_map["is_target"]]
 
@@ -821,7 +794,7 @@ def render_forecast_tab(station_id: str, model: str, horizon: int, fdate: date, 
     with col_gauge:
         if "_error" not in pred_data:
             st.markdown("#### 📊 Forecast Summary")
-            level  = pred_data.get("pm10_level", "Moderate")
+            level = pred_data.get("pm10_level", "Moderate")
             regime = pred_data.get("regime", "Moderate")
             trend  = pred_data.get("trend", "Stable")
 
@@ -847,7 +820,6 @@ def render_forecast_tab(station_id: str, model: str, horizon: int, fdate: date, 
 
     st.divider()
 
-    # ── PM10 chart: real 7-day history + 1-day model forecast ────────────────
     if "_error" not in pred_data:
         st.markdown("#### 📈 PM10 Levels - Last 7 Days & 1-Day Forecast")
 
@@ -858,7 +830,6 @@ def render_forecast_tab(station_id: str, model: str, horizon: int, fdate: date, 
             payload_3d = {**payload_1d, "horizon": 3}
             pred_3d    = _api_post("/predict", payload_3d)
 
-        # If 3-day prediction failed, fall back to 1-day result already in hand
         if "_error" in pred_3d:
             pred_3d = pred_data
 
@@ -866,16 +837,14 @@ def render_forecast_tab(station_id: str, model: str, horizon: int, fdate: date, 
         if not forecasts:
             st.info("No forecast data available for the selected model and date.")
         else:
-            fc_dates = [f["date"]          for f in forecasts]
-            fc_pm10  = [f["pm10"]          for f in forecasts]
+            fc_dates = [f["date"] for f in forecasts]
+            fc_pm10  = [f["pm10"] for f in forecasts]
             fc_lower = [f.get("pm10_lower") for f in forecasts]
             fc_upper = [f.get("pm10_upper") for f in forecasts]
 
-            # ISO-string x labels - categorical axis needs explicit strings
             hist_x = [str(d) for d in hist_dates]
-            fc_x   = list(fc_dates)           # already strings from API
+            fc_x   = list(fc_dates) 
 
-            # Explicit category order: historical then forecast (no gaps)
             all_x = hist_x + fc_x
 
             fig_bar = go.Figure()
@@ -919,7 +888,6 @@ def render_forecast_tab(station_id: str, model: str, horizon: int, fdate: date, 
                 annotation_font=dict(color="#e74c3c", size=11),
             )
 
-            # Vertical separator - paper coords are reliable on categorical axes
             n_hist  = len(hist_x)
             n_total = len(all_x)
             if n_total > 0:
@@ -984,10 +952,10 @@ def render_forecast_tab(station_id: str, model: str, horizon: int, fdate: date, 
         if model == "LightGBM":
             with st.spinner("Computing SHAP values…"):
                 expl = _api_post("/explain", {
-                    "model_name":    model,
+                    "model_name": model,
                     "forecast_date": str(fdate),
-                    "weather":       weather,
-                    "station_id":    station_id,
+                    "weather": weather,
+                    "station_id": station_id,
                 })
 
             if "_error" not in expl:
@@ -1044,20 +1012,20 @@ def render_forecast_tab(station_id: str, model: str, horizon: int, fdate: date, 
         if "_error" not in pred_data:
             with st.spinner("Generating interpretation…"):
                 interp = _api_post("/interpret", {
-                    "model_name":    model,
+                    "model_name": model,
                     "forecast_date": str(fdate),
-                    "weather":       weather,
+                    "weather": weather,
                     "pm10_forecast": pm10_now,
-                    "regime":        pred_data.get("regime", "Moderate"),
-                    "station_id":    station_id,
+                    "regime": pred_data.get("regime", "Moderate"),
+                    "station_id": station_id,
                 })
 
             if "_error" not in interp:
-                lvl       = interp.get("risk_level", "Moderate")
+                lvl = interp.get("risk_level", "Moderate")
                 lvl_color = LEVEL_COLORS.get(lvl, "#888")
                 lvl_emoji = pm10_emoji(pm10_now)
-                drivers   = interp.get("key_drivers", [])
-                w         = weather
+                drivers = interp.get("key_drivers", [])
+                w = weather
 
                 st.markdown(
                     f"<div class='ai-card' style='border-color:{lvl_color}44'>"
@@ -1081,7 +1049,7 @@ def render_forecast_tab(station_id: str, model: str, horizon: int, fdate: date, 
                         unsafe_allow_html=True,
                     )
 
-                pct    = min(pm10_now / 200 * 100, 100)
+                pct = min(pm10_now / 200 * 100, 100)
                 eu_pct = EU_DAILY_LIMIT / 200 * 100
                 st.markdown(
                     f"<div class='ai-section-header' style='margin-top:12px'>Live Weather Conditions</div>"
@@ -1112,9 +1080,6 @@ def render_forecast_tab(station_id: str, model: str, horizon: int, fdate: date, 
                 )
             else:
                 st.warning(interp["_error"])
-
-
-# ── Model Performance tab ─────────────────────────────────────────────────────
 
 def render_performance_tab() -> None:
     st.markdown("#### 📊 Model Performance - Validation Set (2023)")
@@ -1157,11 +1122,11 @@ def render_performance_tab() -> None:
     rows = []
     for name, m in metrics_dict.items():
         rows.append({
-            "Model":        f"⭐ {name}" if name == best_model else name,
-            "MAE (µg/m³)":  m["mae"],
+            "Model": f"⭐ {name}" if name == best_model else name,
+            "MAE (µg/m³)": m["mae"],
             "RMSE (µg/m³)": m["rmse"],
-            "SMAPE (%)":    m["smape"],
-            "R²":           m["r2"],
+            "SMAPE (%)": m["smape"],
+            "R²": m["r2"],
         })
     df_m = pd.DataFrame(rows).set_index("Model")
 
@@ -1243,7 +1208,6 @@ def show_business_impact():
     for residents, public institutions, and regulators - with up to 7 days of advance warning.
     """)
 
-    # --- Key metrics ---
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Historical data", "6 years", "2019–2024, 4 stations")
     col2.metric("Models compared", "4", "LightGBM · SARIMAX · Prophet · ARIMA")
@@ -1252,7 +1216,6 @@ def show_business_impact():
 
     st.markdown("---")
 
-    # --- Impact cards ---
     col_a, col_b = st.columns(2)
 
     with col_a:
@@ -1298,15 +1261,12 @@ def show_business_impact():
             the model prioritizes public health protection.
             """)
 
-    # --- Pull quote ---
     st.markdown("---")
     st.info(
         "💬  *\"If PM10 will exceed 50 µg/m³ tomorrow, the system flags it today - "
         "and explains why: frost, no wind, high humidity. "
         "The resident decides whether to keep their children indoors.\"*"
     )
-
-# ── How the Models Work tab ───────────────────────────────────────────────────
 
 def render_models_tab() -> None:
     st.markdown("#### How the Models Work")
@@ -1319,7 +1279,6 @@ def render_models_tab() -> None:
 
     tab_lgbm, tab_prophet, tab_arima = st.tabs(["LightGBM", "Prophet", "ARIMA / SARIMA"])
 
-    # ── LightGBM ──────────────────────────────────────────────────────────────
     with tab_lgbm:
         st.markdown(
             "<div class='model-card'>"
@@ -1368,7 +1327,6 @@ def render_models_tab() -> None:
             unsafe_allow_html=True,
         )
 
-    # ── Prophet ───────────────────────────────────────────────────────────────
     with tab_prophet:
         st.markdown(
             "<div class='model-card'>"
@@ -1416,7 +1374,6 @@ def render_models_tab() -> None:
             unsafe_allow_html=True,
         )
 
-    # ── ARIMA / SARIMA ────────────────────────────────────────────────────────
     with tab_arima:
         st.markdown(
             "<div class='model-card'>"
@@ -1464,9 +1421,6 @@ def render_models_tab() -> None:
             "</div>",
             unsafe_allow_html=True,
         )
-
-
-# ── Report section ────────────────────────────────────────────────────────────
 
 def _build_report_html(
     fdate: date, model: str, pm10: float, level: str, regime: str, trend: str,
@@ -1546,14 +1500,14 @@ def _build_pdf_bytes(
         topMargin=2 * cm, bottomMargin=2 * cm,
     )
     styles = getSampleStyleSheet()
-    green  = rl_colors.HexColor("#4B9965")
-    grey   = rl_colors.HexColor("#888888")
+    green = rl_colors.HexColor("#4B9965")
+    grey  = rl_colors.HexColor("#888888")
 
     title_style = ParagraphStyle("RPTitle", parent=styles["Heading1"],
                                  fontSize=18, spaceAfter=4, textColor=green)
-    h2_style    = ParagraphStyle("RPH2", parent=styles["Heading2"],
+    h2_style = ParagraphStyle("RPH2", parent=styles["Heading2"],
                                  fontSize=12, spaceAfter=4, textColor=rl_colors.HexColor("#34495e"))
-    body_style  = ParagraphStyle("RPBody", parent=styles["Normal"], fontSize=10, leading=15)
+    body_style = ParagraphStyle("RPBody", parent=styles["Normal"], fontSize=10, leading=15)
     small_style = ParagraphStyle("RPSmall", parent=styles["Normal"], fontSize=8, textColor=grey)
 
     row_bg = [rl_colors.HexColor("#f8f8f8"), rl_colors.white]
@@ -1561,11 +1515,11 @@ def _build_pdf_bytes(
     def _table(data: list) -> Table:
         tbl = Table(data, colWidths=[4.5 * cm, 12 * cm])
         tbl.setStyle(TableStyle([
-            ("FONTSIZE",        (0, 0), (-1, -1), 10),
-            ("TEXTCOLOR",       (0, 0), (0, -1), grey),
-            ("BOTTOMPADDING",   (0, 0), (-1, -1), 5),
-            ("TOPPADDING",      (0, 0), (-1, -1), 5),
-            ("ROWBACKGROUNDS",  (0, 0), (-1, -1), row_bg),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ("TEXTCOLOR", (0, 0), (0, -1), grey),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("ROWBACKGROUNDS", (0, 0), (-1, -1), row_bg),
         ]))
         return tbl
 
@@ -1623,7 +1577,6 @@ def _build_pdf_bytes(
     doc.build(story)
     return buf.getvalue()
 
-
 def render_report_section(station_id: str, model: str, fdate: date, weather: dict) -> None:
     station_meta = STATIONS_META.get(station_id, STATIONS_META["MpKrakWadow"])
     station_name = station_meta["name"]
@@ -1654,20 +1607,17 @@ def render_report_section(station_id: str, model: str, fdate: date, weather: dic
         st.error("Report generation failed. Check your connection to the backend.")
         return
 
-    pm10    = pred["forecasts"][0]["pm10"]
-    level   = pred["pm10_level"]
-    regime  = pred["regime"]
-    trend   = pred["trend"]
+    pm10 = pred["forecasts"][0]["pm10"]
+    level = pred["pm10_level"]
+    regime = pred["regime"]
+    trend = pred["trend"]
     summary = interp["summary"]
-    rec     = interp["recommendation"]
+    rec = interp["recommendation"]
     drivers = interp.get("key_drivers", [])
-    emoji   = pm10_emoji(pm10)
-    color   = LEVEL_COLORS.get(level, "#888")
+    emoji = pm10_emoji(pm10)
+    color = LEVEL_COLORS.get(level, "#888")
 
-    # Use real historical data in mini chart
     hist_x = [str(d) for d in hist_dates]
-
-    # Explicit category order ensures forecast bar is always visible
     mini_all_x = hist_x + [str(fdate)]
 
     fig_mini = go.Figure()
@@ -1712,13 +1662,13 @@ def render_report_section(station_id: str, model: str, fdate: date, weather: dic
     )
     st.plotly_chart(fig_mini, use_container_width=True)
 
-    eu_status    = ('<span style="color:#e74c3c">exceeded</span>'
+    eu_status = ('<span style="color:#e74c3c">exceeded</span>'
                     if pm10 > EU_DAILY_LIMIT else
                     '<span style="color:#2ecc71">within limit</span>')
-    date_str     = fdate.strftime("%A, %d %B %Y").capitalize()
+    date_str = fdate.strftime("%A, %d %B %Y").capitalize()
     drivers_html = ""
     if drivers:
-        items_html   = "".join(f"<li>{d}</li>" for d in drivers)
+        items_html = "".join(f"<li>{d}</li>" for d in drivers)
         drivers_html = (
             "<div style='margin-top:14px'>"
             "<div class='section-label'>Key Drivers</div>"
@@ -1790,16 +1740,13 @@ def render_report_section(station_id: str, model: str, fdate: date, weather: dic
             mime="text/html",
         )
 
-
-# ── Main ──────────────────────────────────────────────────────────────────────
-
 def main() -> None:
     station_id, model, horizon, fdate, weather = render_sidebar()
 
     station_meta = STATIONS_META.get(station_id, STATIONS_META["MpKrakWadow"])
     station_name = station_meta["name"]
 
-    health     = _api_get("/health")
+    health = _api_get("/health")
     live_badge = ""
     if "_error" not in health:
         live_badge = "<span class='live-badge'>● LIVE</span>"

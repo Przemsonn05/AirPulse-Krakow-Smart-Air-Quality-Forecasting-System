@@ -7,10 +7,8 @@ files or live network access to Open-Meteo.
 """
 
 from __future__ import annotations
-
 import sys
 from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -19,17 +17,14 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-
 TARGET = "MpKrakWadow"
 AUX_STATIONS = ["MpKrakBujaka", "MpKrakBulwar"]
 RNG = np.random.default_rng(42)
-
 
 @pytest.fixture(scope="session")
 def daily_index() -> pd.DatetimeIndex:
     """Two full years of daily timestamps."""
     return pd.date_range("2021-01-01", "2022-12-31", freq="D", name="Date")
-
 
 @pytest.fixture
 def synthetic_raw_pm10(daily_index) -> pd.DataFrame:
@@ -58,7 +53,6 @@ def synthetic_raw_pm10(daily_index) -> pd.DataFrame:
 
     return df
 
-
 @pytest.fixture
 def synthetic_weather(daily_index) -> pd.DataFrame:
     """Minimal weather frame — the columns consumed by feature engineering."""
@@ -80,7 +74,6 @@ def synthetic_weather(daily_index) -> pd.DataFrame:
         },
         index=daily_index,
     )
-
 
 @pytest.fixture
 def synthetic_merged(synthetic_raw_pm10, synthetic_weather) -> pd.DataFrame:

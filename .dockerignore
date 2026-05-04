@@ -1,12 +1,3 @@
-# =============================================================================
-# .dockerignore — excluded from the Docker build context
-#
-# Keeping the build context small:
-#  • speeds up `docker build` (less data sent to the daemon)
-#  • prevents secrets / large binaries from ending up in layers
-#  • ensures reproducible images (no accidental local state baked in)
-# =============================================================================
-
 __pycache__/
 *.pyc
 *.pyo

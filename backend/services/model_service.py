@@ -15,14 +15,13 @@ Run scripts/prepare_api_artifacts.py once to generate the supplementary artefact
 """
 
 from __future__ import annotations
-
 import logging
 import math
 import pickle
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
-
+from config.config import STATIONS_META as _STATIONS_META
 import holidays
 import joblib
 import numpy as np
@@ -31,24 +30,17 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 _MODELS = Path(__file__).resolve().parent.parent.parent / "models"
-
-# Target station the models were trained on
 _TARGET_STATION = "MpKrakWadow"
-
-# Derived at import time from the dynamically detected station list in config
-from config.config import STATIONS_META as _STATIONS_META
 AVAILABLE_STATIONS: list[str] = list(_STATIONS_META.keys())
-
-_LGBM_PATH       = _MODELS / "lgbm_model.joblib"
-_ARIMA_PATH      = _MODELS / "arima_model.pkl"
-_SARIMAX_PATH    = _MODELS / "sarimax_model.pkl"
-_LAMBDA_PATH     = _MODELS / "lambda_bc.pkl"
-_HISTORY_PATH    = _MODELS / "recent_history.pkl"
-_SCALER_PATH     = _MODELS / "scaler.pkl"
-_KMEANS_PATH     = _MODELS / "kmeans_model.pkl"
-_METRICS_PATH    = _MODELS / "metrics.pkl"
+_LGBM_PATH = _MODELS / "lgbm_model.joblib"
+_ARIMA_PATH = _MODELS / "arima_model.pkl"
+_SARIMAX_PATH = _MODELS / "sarimax_model.pkl"
+_LAMBDA_PATH = _MODELS / "lambda_bc.pkl"
+_HISTORY_PATH = _MODELS / "recent_history.pkl"
+_SCALER_PATH = _MODELS / "scaler.pkl"
+_KMEANS_PATH = _MODELS / "kmeans_model.pkl"
+_METRICS_PATH = _MODELS / "metrics.pkl"
 _VALIDATION_PATH = _MODELS / "validation_results.pkl"
-
 
 def _load_pkl(path: Path):
     if not path.exists():
@@ -56,19 +48,16 @@ def _load_pkl(path: Path):
     with open(path, "rb") as fh:
         return pickle.load(fh)
 
-
 def _safe_inv_boxcox(values: np.ndarray, lam: float) -> np.ndarray:
     """Thin re-export of :func:`src.utils.safe_inv_boxcox` to keep the old import path."""
     from src.utils import safe_inv_boxcox
     return safe_inv_boxcox(values, lam)
-
 
 def _pm10_level(pm10: float) -> str:
     if pm10 < 25:   return "Good"
     if pm10 < 50:   return "Moderate"
     if pm10 < 100:  return "High"
     return "Very High"
-
 
 def _trend_label(forecasts: list[float]) -> str:
     if len(forecasts) < 2:
@@ -78,12 +67,9 @@ def _trend_label(forecasts: list[float]) -> str:
     if delta < -5:  return "Falling"
     return "Stable"
 
-
-
 def _cyclical(value: float, period: float) -> tuple[float, float]:
     rad = 2 * math.pi * value / period
     return math.sin(rad), math.cos(rad)
-
 
 def _compute_lgbm_features(
     w: dict,         
@@ -93,15 +79,14 @@ def _compute_lgbm_features(
 ) -> pd.DataFrame:
     """
     Build the full 68-column feature vector that the saved LightGBM model expects.
-
     'history' is a DataFrame with at least 'PM10_transformed' and weather columns
     for the last ~30 days prior to 'dt', sorted ascending.  If not available,
     sensible defaults are used.
     """
-    month   = dt.month
-    dow     = dt.dayofweek  
-    doy     = dt.dayofyear
-    year    = dt.year
+    month = dt.month
+    dow = dt.dayofweek  
+    doy = dt.dayofyear
+    year = dt.year
     is_wknd = int(dow >= 5)
     is_heat = int(month in [1, 2, 3, 10, 11, 12])
 
@@ -112,25 +97,25 @@ def _compute_lgbm_features(
     ds, dc = _cyclical(dow, 7)
     ys, yc = _cyclical(doy, 365)
 
-    temp_avg     = w["temp_avg"]
-    wind_max     = w["wind_max"]
-    wind_mean    = w["wind_mean"]
+    temp_avg = w["temp_avg"]
+    wind_max = w["wind_max"]
+    wind_mean = w["wind_mean"]
     pressure_avg = w["pressure_avg"]
     humidity_avg = w["humidity_avg"]
-    rain_sum     = w["rain_sum"]
+    rain_sum = w["rain_sum"]
     snowfall_sum = w["snowfall_sum"]
-    temp_min     = w.get("temp_min") or (temp_avg - 5)
-    temp_max     = w.get("temp_max") or (temp_avg + 5)
+    temp_min = w.get("temp_min") or (temp_avg - 5)
+    temp_max = w.get("temp_max") or (temp_avg + 5)
 
     wind_dir_sin = 0.0
     wind_dir_cos = 0.0
 
-    is_frost     = int(temp_avg <= 0)
-    is_calm      = int(wind_mean <= 2)
+    is_frost = int(temp_avg <= 0)
+    is_calm = int(wind_mean <= 2)
     wind_inverse = 1.0 / (wind_max + 0.1)
-    hdd          = max(0.0, 15.0 - temp_avg)
-    temp_ampl    = temp_max - temp_min
-    inversion    = int(temp_ampl < 4 and temp_avg < 5 and is_calm)
+    hdd = max(0.0, 15.0 - temp_avg)
+    temp_ampl = temp_max - temp_min
+    inversion = int(temp_ampl < 4 and temp_avg < 5 and is_calm)
 
     if history is not None and len(history) >= 2:
         pm10_t = history["PM10_transformed"].dropna()
@@ -162,9 +147,9 @@ def _compute_lgbm_features(
         if aux_cols:
             aux_lag1 = history[aux_cols].iloc[-1]
             aux_mean = float(aux_lag1.mean())
-            aux_std  = float(aux_lag1.std())
-            aux_max  = float(aux_lag1.max())
-            aux_sp   = float(aux_lag1.max() - aux_lag1.min())
+            aux_std = float(aux_lag1.std())
+            aux_max = float(aux_lag1.max())
+            aux_sp = float(aux_lag1.max() - aux_lag1.min())
             bujaka_l1 = float(history["MpKrakBujaka"].iloc[-1]) if "MpKrakBujaka" in history.columns else aux_mean
             bulwar_l1 = float(history["MpKrakBulwar"].iloc[-1]) if "MpKrakBulwar" in history.columns else aux_mean
             swoszo_l1 = float(history["MpKrakSwoszo"].iloc[-1]) if "MpKrakSwoszo" in history.columns else aux_mean
@@ -177,9 +162,9 @@ def _compute_lgbm_features(
                 return float(history[col].iloc[-n])
             return w.get(col, 0.0)
 
-        t_l2 = _wlag("temp_avg", 2);     t_l3 = _wlag("temp_avg", 3)
+        t_l2 = _wlag("temp_avg", 2); t_l3 = _wlag("temp_avg", 3)
         p_l2 = _wlag("pressure_avg", 2); p_l3 = _wlag("pressure_avg", 3)
-        wm_l2= _wlag("wind_mean", 2);    wm_l3= _wlag("wind_mean", 3)
+        wm_l2= _wlag("wind_mean", 2); wm_l3= _wlag("wind_mean", 3)
         h_l2 = _wlag("humidity_avg", 2); h_l3 = _wlag("humidity_avg", 3)
 
     else:
@@ -199,7 +184,7 @@ def _compute_lgbm_features(
 
     is_frost_calm = is_frost * is_calm
     is_heat_calm  = is_heat  * is_calm
-    hdd_calm_     = hdd      * is_calm
+    hdd_calm_ = hdd * is_calm
     cold_dry_calm = int(temp_avg < 0) * int(rain_sum == 0) * is_calm
     regime_cluster = _heuristic_regime(temp_avg, wind_max, is_heat)
 
@@ -240,7 +225,6 @@ def _compute_lgbm_features(
     }
     return pd.DataFrame([row])
 
-
 def _get_station_history(
     history: Optional[pd.DataFrame],
     station_id: str,
@@ -271,13 +255,11 @@ def _get_station_history(
 
     h = history.copy()
     raw = h[station_id].clip(lower=0.01).fillna(0.01)
-    # Apply Box-Cox forward transform with the stored lambda
     if lambda_bc == 0:
         h["PM10_transformed"] = np.log(raw)
     else:
         h["PM10_transformed"] = (raw ** lambda_bc - 1) / lambda_bc
     return h
-
 
 def _heuristic_regime(temp_avg: float, wind_max: float, is_heat: int) -> int:
     """Classify into 0=Clean, 1=Moderate, 2=Polluted via simple rules.
@@ -288,7 +270,6 @@ def _heuristic_regime(temp_avg: float, wind_max: float, is_heat: int) -> int:
         return 2
     return 1
 
-
 def _extend_history(
     history: pd.DataFrame,
     weather: dict,
@@ -297,7 +278,6 @@ def _extend_history(
     dt: pd.Timestamp,
 ) -> pd.DataFrame:
     """Append a synthetic history row for the next day's LightGBM forecast.
-
     Inherits the previous row's schema so all columns expected by
     :func:`_compute_lgbm_features` are present; overwrites the few columns
     that change day-to-day (target PM10, its Box-Cox form, and weather if
@@ -467,13 +447,13 @@ class ModelService:
 
         preds, lowers, uppers = [], [], []
         for day_offset in range(horizon):
-            dt    = pd.Timestamp(forecast_date) + pd.Timedelta(days=day_offset)
+            dt = pd.Timestamp(forecast_date) + pd.Timedelta(days=day_offset)
             month = dt.month
             is_heat = int(month in [1, 2, 3, 10, 11, 12])
             is_calm = int(weather["wind_mean"] <= 2)
-            hdd     = max(0.0, 15.0 - weather["temp_avg"])
+            hdd = max(0.0, 15.0 - weather["temp_avg"])
             rain_3d = weather["rain_sum"]
-            inv_    = int(weather["temp_avg"] < 5 and is_calm)
+            inv_ = int(weather["temp_avg"] < 5 and is_calm)
 
             exog_row = np.array([[
                 weather["temp_avg"], weather["wind_max"], is_heat,
@@ -491,8 +471,8 @@ class ModelService:
                 raw_lower = float(ci_arr[0, 0])
                 raw_upper = float(ci_arr[0, 1])
                 pm10 = float(_safe_inv_boxcox(np.array([raw]), self.lambda_bc)[0])
-                lo   = float(_safe_inv_boxcox(np.array([raw_lower]), self.lambda_bc)[0])
-                hi   = float(_safe_inv_boxcox(np.array([raw_upper]), self.lambda_bc)[0])
+                lo = float(_safe_inv_boxcox(np.array([raw_lower]), self.lambda_bc)[0])
+                hi = float(_safe_inv_boxcox(np.array([raw_upper]), self.lambda_bc)[0])
                 preds.append(pm10)
                 lowers.append(lo)
                 uppers.append(hi)
@@ -509,21 +489,21 @@ class ModelService:
             raise RuntimeError("ARIMA model not loaded")
 
         try:
-            fc  = self.arima.get_forecast(steps=horizon)
-            pm  = fc.predicted_mean
-            raw_preds  = np.asarray(pm).flatten()
-            ci         = fc.conf_int(alpha=0.10)
-            ci_arr     = np.asarray(ci)
+            fc = self.arima.get_forecast(steps=horizon)
+            pm = fc.predicted_mean
+            raw_preds = np.asarray(pm).flatten()
+            ci = fc.conf_int(alpha=0.10)
+            ci_arr = np.asarray(ci)
             lowers_raw = ci_arr[:, 0].flatten()
             uppers_raw = ci_arr[:, 1].flatten()
         except Exception as exc:
             logger.warning("ARIMA get_forecast failed: %s — using last value", exc)
             last_bc = float(self.arima.model.endog[-1])
-            raw_preds  = np.full(horizon, last_bc)
+            raw_preds = np.full(horizon, last_bc)
             lowers_raw = raw_preds * 0.85
             uppers_raw = raw_preds * 1.15
 
-        preds  = _safe_inv_boxcox(raw_preds,  self.lambda_bc).tolist()
+        preds = _safe_inv_boxcox(raw_preds,  self.lambda_bc).tolist()
         lowers = _safe_inv_boxcox(lowers_raw, self.lambda_bc).tolist()
         uppers = _safe_inv_boxcox(uppers_raw, self.lambda_bc).tolist()
         return preds, lowers, uppers

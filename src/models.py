@@ -18,7 +18,6 @@ Key design choices (mirroring notebook cells 91–128):
 
 import warnings
 from typing import Optional
-
 import numpy as np
 import pandas as pd
 import lightgbm as lgb
@@ -29,7 +28,6 @@ from sklearn.preprocessing import StandardScaler
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from statsmodels.tsa.stattools import adfuller
-
 from src.utils import get_logger
 
 logger = get_logger(__name__)
@@ -176,13 +174,13 @@ def train_predict_sarimax(
         enforce_invertibility=False,
     ).fit(disp=False)
 
-    history_y    = series.tolist()
+    history_y = series.tolist()
     history_exog = train_exog_aligned.values.tolist()
-    predictions  = []
+    predictions = []
 
     for i in range(len(val)):
         exog_now = val_exog.iloc[i : i + 1]
-        yhat     = fitted.forecast(steps=1, exog=exog_now)[0]
+        yhat = fitted.forecast(steps=1, exog=exog_now)[0]
         predictions.append(yhat)
 
         history_y.append(val[target_col].iloc[i])
@@ -394,7 +392,6 @@ def train_predict_lgbm(
         best_n, len(X_val),
     )
     return predictions, model
-
 
 def _optuna_search(
     X_tr: pd.DataFrame,

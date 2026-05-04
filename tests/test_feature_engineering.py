@@ -8,17 +8,14 @@ Focus areas:
 """
 
 from __future__ import annotations
-
 import numpy as np
 import pandas as pd
 import pytest
-
 from src.feature_engineering import (
     add_lag_features,
     add_rolling_features,
     apply_boxcox_transform,
 )
-
 
 def test_boxcox_lambda_only_uses_training_data(synthetic_raw_pm10):
     """If we shuffle values *after* train_end the lambda must not change."""
@@ -39,7 +36,6 @@ def test_boxcox_lambda_only_uses_training_data(synthetic_raw_pm10):
         "Lambda changed after mutating post-train values → Box-Cox peeked at val/test"
     )
 
-
 def test_boxcox_transformed_column_keeps_nans_for_missing_inputs():
     idx = pd.date_range("2022-01-01", periods=10, freq="D")
     values = [10.0, 12.0, np.nan, 15.0, 14.0, 13.0, np.nan, 20.0, 22.0, 18.0]
@@ -49,7 +45,6 @@ def test_boxcox_transformed_column_keeps_nans_for_missing_inputs():
 
     assert out["PM10_transformed"].isna().sum() == 2
     assert out["PM10_transformed"].notna().sum() == 8
-
 
 def test_lag_feature_equals_shift_of_transformed_column():
     idx = pd.date_range("2022-01-01", periods=30, freq="D")
@@ -69,7 +64,6 @@ def test_lag_feature_equals_shift_of_transformed_column():
         df["PM10_transformed"].shift(7).rename("lag_7d"),
     )
 
-
 def test_rolling_features_are_built_on_shift1_base():
     """Same-day value must never leak into rolling mean/std."""
     idx = pd.date_range("2022-01-01", periods=40, freq="D")
@@ -85,7 +79,6 @@ def test_rolling_features_are_built_on_shift1_base():
     assert not out["rolling_mean_3d"].equals(df["pm_raw"].rolling(3).mean()), (
         "Rolling feature must not equal a same-day rolling — that would leak today's value"
     )
-
 
 def test_rolling_features_add_momentum_difference():
     idx = pd.date_range("2022-01-01", periods=40, freq="D")
